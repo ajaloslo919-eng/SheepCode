@@ -1,0 +1,16 @@
+---
+description: Las pruebas de rendimiento de este proyecto solo evalúan SheepGPT
+alwaysApply: true
+---
+
+# Pruebas exclusivamente de SheepGPT
+
+Por instrucción expresa del usuario, la única IA evaluada en pruebas de rendimiento es SheepGPT.
+
+- Medir únicamente sus flujos reales y componentes integrados en la versión instalada.
+- No ejecutar modelos alternativos, candidatos desactivados ni comparativas entre otras IAs.
+- No presentar una llamada aislada a un modelo de lenguaje como rendimiento de SheepGPT.
+- Un cálculo determinista del programa de pruebas puede servir como respuesta correcta; no constituye otra IA.
+- Si SheepGPT no tiene una capacidad activa, registrar «no disponible» o la respuesta real; no sustituirla por otra IA.
+- Separar tiempos del componente visual, captura completa, aciertos y límites de validación.
+- Excluir de futuros reportes los resultados de modelos externos obtenidos antes de esta regla.

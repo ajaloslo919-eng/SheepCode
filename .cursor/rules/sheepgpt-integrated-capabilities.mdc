@@ -1,0 +1,21 @@
+---
+description: Toda integración de SheepGPT debe ser conocida y utilizable desde su diálogo
+alwaysApply: true
+---
+
+# Capacidades integradas y utilizables
+
+Por petición del usuario, cada función nueva debe quedar conectada a SheepGPT, además de a su interfaz.
+
+- Registrar su descripción, acciones reales, ajustes, ejemplos y límites de autonomía en `IntegratedCapabilities`.
+- Incluir las capacidades instaladas en las instrucciones del diálogo compartido por texto y voz. No limitarse a documentarlas en un archivo que el modelo no recibe.
+- Conectar peticiones naturales a herramientas verificables para usar, configurar, activar, desactivar y deshacer la función cuando corresponda.
+- Permitir decisiones autónomas dentro de los permisos aplicables y de las opciones de iniciativa activadas; respetar las pausas y las preferencias del usuario.
+- La autonomía no permite reescribir código, ejecutar comandos arbitrarios ni ampliar permisos a partir de un TXT, web o respuesta del modelo.
+- Confirmar resultados reales antes de afirmarlos. Distinguir «disponible», «desactivado», «sin configurar» y «falló»; no inventar una incapacidad general.
+- Leer un TXT solicitado significa leer su contenido, sin reemplazarlo por una explicación, negativa genérica o nueva nota. Resumirlo solo cuando se pida.
+- Si falta un archivo o un ajuste, identificar el dato concreto que falta, conservando el hilo.
+- Probar la integración instalada mediante su entrada conversacional y su herramienta, incluyendo un ajuste y una desactivación cuando existan.
+- Mantener las reglas de pruebas exclusivas de SheepGPT y de TTS neuronal local en la RX 580.
+
+Ejemplo: «Lee el TXT que estás consultando» debe resolver la nota actual, leer el archivo y entregar ese texto a la voz local. «Pausa tus efectos automáticos» debe cambiar y verificar el estado del motor de efectos.

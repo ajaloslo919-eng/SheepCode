@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="240" viewBox="0 0 900 240" role="img" aria-labelledby="title desc">
+  <title id="title">SheepCode · Sheep &amp; Kuky</title><desc id="desc">Una oveja sonriente y una gatita rosa en un taller de colores pastel.</desc>
+  <rect width="900" height="240" rx="32" fill="#201a2d"/>
+  <g fill="#ddcaff"><path d="M40 38h4v-8h4v8h8v4h-8v8h-4v-8h-4z"/><path d="M834 169h4v-9h4v9h9v4h-9v9h-4v-9h-4z"/><circle cx="340" cy="42" r="4"/><circle cx="809" cy="45" r="3"/></g>
+  <g fill="#ffbddc"><circle cx="205" cy="32" r="5"/><circle cx="216" cy="28" r="5"/><circle cx="224" cy="37" r="5"/><path d="M750 50c-13-20-35 4 0 23 35-19 13-43 0-23z"/></g>
+  <g transform="translate(72 65)"><g fill="#fff4db"><circle cx="62" cy="40" r="46"/><circle cx="29" cy="34" r="23"/><circle cx="92" cy="34" r="24"/><circle cx="18" cy="58" r="22"/><circle cx="102" cy="58" r="22"/><circle cx="43" cy="12" r="22"/><circle cx="75" cy="8" r="22"/><circle cx="42" cy="85" r="24"/><circle cx="81" cy="85" r="24"/></g><ellipse cx="62" cy="64" rx="30" ry="29" fill="#cfb3ce"/><g fill="none" stroke="#624a69" stroke-width="4" stroke-linecap="round"><path d="M46 56q5-6 10 0M68 56q5-6 10 0M56 74q6 7 12 0"/></g><g fill="#f49cc7"><ellipse cx="43" cy="68" rx="8" ry="5"/><ellipse cx="81" cy="68" rx="8" ry="5"/></g></g>
+  <g transform="translate(217 76)"><path d="M8 39 3 0 41 20 77 20 112 0 109 42" fill="#ef9bc4"/><path d="m13 14 2 19 15-11M101 14l-2 19-15-11" fill="#ffe5f0"/><ellipse cx="59" cy="57" rx="59" ry="43" fill="#ffc4df"/><g fill="none" stroke="#825078" stroke-width="4" stroke-linecap="round"><path d="M32 47q6-7 12 0M74 47q6-7 12 0M48 65q5 9 11 2 6 7 11-2M3 57l16 2M4 70l15-3M99 59l17-2M99 67l15 3"/></g><path d="m53 59 6 6 6-6z" fill="#b26391"/></g>
+  <text x="373" y="100" fill="#fff1d6" font-family="Segoe UI,Arial,sans-serif" font-size="46" font-weight="600">SheepCode</text>
+  <text x="374" y="144" fill="#ffc4df" font-family="Segoe UI,Arial,sans-serif" font-size="28">Sheep &amp; Kuky</text>
+  <text x="374" y="181" fill="#d2c1e9" font-family="Segoe UI,Arial,sans-serif" font-size="19">Tu pequeño taller de código con IA local</text>
+</svg>

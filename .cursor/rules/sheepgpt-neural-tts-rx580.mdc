@@ -1,0 +1,15 @@
+---
+description: SheepGPT conserva TTS neuronal local y expresivo en la RX 580
+alwaysApply: true
+---
+
+# Voz neuronal en la RX 580
+
+- La voz de SheepGPT debe generarse con TTS de IA local en la RX 580.
+- Conservar la voz emocional, su identidad y el control de expresividad al adaptar el backend.
+- Si falta una integración compatible, desarrollar el backend o las operaciones necesarias e integrarlas en SheepGPT.
+- No dar por satisfecha esta petición reduciendo silenciosamente la voz a síntesis convencional o sustituyendo la voz emocional por otra menos expresiva.
+- No trasladar la inferencia de voz a la RTX 2060 SUPER, a un servicio remoto o a CPU como sustituto silencioso. Informar de cualquier operación auxiliar que realmente se ejecute en CPU.
+- Seleccionar y verificar el adaptador RX 580 real; una etiqueta de configuración no demuestra uso de esa GPU.
+- Declarar terminado el soporte únicamente después de probar el componente instalado, la salida de audio y su cancelación. Informar de los límites y errores pendientes.
+- Seguir `sheepgpt-benchmark-only.mdc`: medir solo SheepGPT y sus componentes activos; no usar otra IA para sustituir una capacidad ausente.

@@ -1,0 +1,37 @@
+using System.Text.Json;
+
+namespace SheepCode;
+
+internal static class ModelProtocol
+{
+    private static readonly IReadOnlyDictionary<string, string[]> Fields = new Dictionary<string, string[]>
+    {
+        ["list_files"] = [], ["read_file"] = ["path"], ["search_files"] = ["query"], ["edit_file"] = ["path", "find", "replace"],
+        ["write_file"] = ["path", "content"], ["run_check"] = ["check"], ["finish"] = ["message"], ["use_skill"] = ["name"],
+        ["pc_windows"] = [], ["pc_read"] = [], ["pc_click"] = ["node"], ["pc_type"] = ["node", "text"],
+        ["browser_tabs"] = [], ["browser_open"] = ["url"], ["browser_read"] = ["tab"], ["browser_click"] = ["tab", "node"],
+        ["browser_fill"] = ["tab", "node", "text"], ["browser_back"] = ["tab"], ["browser_close"] = ["tab"], ["model_status"] = [], ["system_info"] = [], ["portable_status"] = []
+    };
+    internal static string? ValidateAction(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("action", out var action) || action.ValueKind != JsonValueKind.String)
+            return "Incluye action como cadena en un único objeto JSON.";
+        var tool = action.GetString()!;
+        if (!Fields.TryGetValue(tool, out var required)) return "Acción no registrada: " + tool + ". Usa únicamente las acciones descritas en el sistema.";
+        var missing = required.Where(field => !value.TryGetProperty(field, out var item) || item.ValueKind != JsonValueKind.String).ToArray();
+        if (missing.Length == 0) return null;
+        return "La acción " + tool + " requiere cadenas en los campos " + string.Join(", ", missing) + ". Colócalos al mismo nivel que action, sin envolverlos en arguments. " +
+            (tool == "write_file" ? "Ejemplo: {\"action\":\"write_file\",\"path\":\"hello.py\",\"content\":\"print('Hola')\\n\",\"message\":\"Propongo crear hello.py.\"}. content contiene el código completo. Para editar un archivo largo, lee el fragmento y usa edit_file(path,find,replace) con una sustitución corta." : "Corrige solo la forma de la acción; no se ejecutó ninguna herramienta.");
+    }
+    internal static bool StructuredFailure(string raw)
+    {
+        try
+        {
+            using var data = JsonDocument.Parse(raw);
+            return data.RootElement.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object &&
+                error.TryGetProperty("code", out var code) && code.GetString() == "structured_output_failed";
+        }
+        catch (JsonException) { return false; }
+    }
+    internal static int OutputBudget(int attempt, int context) => Math.Min(new[] { 1024, 2048, 3072 }[Math.Clamp(attempt, 0, 2)], context / 2);
+}
