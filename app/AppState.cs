@@ -58,6 +58,7 @@ internal sealed class Preferences
     public int MaximumSteps { get; set; } = 10;
     public List<string> DisabledSkills { get; set; } = [];
     public string PortableMode { get; set; } = "auto";
+    public bool AutoCheckUpdates { get; set; }
     public static string PathName => Path.Combine(AppPaths.State, "preferences.json");
     public static Preferences Load()
     {

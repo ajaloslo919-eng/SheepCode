@@ -1,2 +1,2 @@
-1 ICON "../source/sheep.ico"
-1 24 "../source/app.manifest"
+1 ICON "../app/sheep.ico"
+1 24 "../app/app.manifest"

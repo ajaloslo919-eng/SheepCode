@@ -13,6 +13,8 @@ internal sealed class ProjectWorkspace
         name.EndsWith(".pem", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".pfx", StringComparison.OrdinalIgnoreCase) ||
         name.EndsWith(".key", StringComparison.OrdinalIgnoreCase) || name.Contains("api_key", StringComparison.OrdinalIgnoreCase) ||
         name.Equals("api.txt", StringComparison.OrdinalIgnoreCase) || name.Equals("credentials", StringComparison.OrdinalIgnoreCase);
+    private static bool Managed(string path) => new[] { "state", "temp", "sessions", "changes", "logs", "runtime", "backups", "app" }.Any(folder =>
+        path.Equals(Path.Combine(AppPaths.Root, folder), StringComparison.OrdinalIgnoreCase) || path.StartsWith(Path.Combine(AppPaths.Root, folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
 
     internal ProjectWorkspace(string root)
     {
@@ -25,6 +27,7 @@ internal sealed class ProjectWorkspace
         if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains(':'))
             throw new InvalidOperationException("Usa una ruta relativa dentro del proyecto.");
         var result = Path.GetFullPath(Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar)));
+        if (Managed(result)) throw new InvalidOperationException("Los ajustes, permisos y binarios instalados solo se modifican desde sus controles humanos. Abre source para editar el código.");
         if (!result.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && !(directory && result.Equals(Root, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("La ruta sale del proyecto abierto.");
         foreach (var segment in Path.GetRelativePath(Root, result).Split(Path.DirectorySeparatorChar))
@@ -47,7 +50,7 @@ internal sealed class ProjectWorkspace
             {
                 if (files.Count >= maximum) return;
                 var name = Path.GetFileName(path);
-                if (Ignored.Contains(name) || Secret(name) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
+                if (Ignored.Contains(name) || Secret(name) || Managed(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
                 if (Directory.Exists(path)) Visit(path);
                 else files.Add(Path.GetRelativePath(Root, path).Replace('\\', '/'));
             }
@@ -62,6 +65,22 @@ internal sealed class ProjectWorkspace
         var bom = bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf });
         var text = new UTF8Encoding(false, true).GetString(bytes.AsSpan(bom ? 3 : 0));
         return new(relative, text, AppPaths.Hash(bytes), bom, text.Contains("\r\n") ? "\r\n" : "\n");
+    }
+    internal byte[] ReadBytes(string relative)
+    {
+        var path = Resolve(relative); if (new FileInfo(path).Length > 4 * 1024 * 1024) throw new IOException("Máximo 4 MiB por artefacto.");
+        return File.ReadAllBytes(path);
+    }
+    internal void WriteBytes(string relative, byte[] bytes, string? expectedHash)
+    {
+        if (bytes.Length > 4 * 1024 * 1024) throw new IOException("Máximo 4 MiB por artefacto.");
+        var path = Resolve(relative);
+        bool Changed() => expectedHash is null ? File.Exists(path) : !File.Exists(path) || AppPaths.Hash(ReadBytes(relative)) != expectedHash;
+        if (Changed()) throw new IOException("El archivo cambió desde su lectura; conserva la edición actual.");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!); CheckLinks(path);
+        var temporary = path + ".sheepcode-" + Guid.NewGuid().ToString("N") + ".tmp";
+        try { File.WriteAllBytes(temporary, bytes); if (Changed()) throw new IOException("Edición concurrente; no se sobrescribió el archivo."); File.Move(temporary, path, true); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
     internal string ReadLines(string path, int start = 1, int count = 100)
     {
@@ -123,9 +142,13 @@ internal sealed class ProposedChange
     public string Status { get; set; } = "pending";
     public DateTimeOffset At { get; set; } = DateTimeOffset.Now;
     public string Reason { get; set; } = "";
+    public string? ArtifactFormat { get; set; }
+    public string? BeforeBinary { get; set; }
+    public string? AfterBinary { get; set; }
     internal void Save() => AppPaths.SaveJson(System.IO.Path.Combine(AppPaths.Changes, Id + ".json"), this);
     internal string Diff()
     {
+        if (ArtifactFormat is not null) return $"🐑 Artefacto {ArtifactFormat.ToUpperInvariant()} · {Path}\n\nActual: {Before}\n\nContenido propuesto:\n{After}\n\nAplicar guarda el documento; Deshacer conserva las ediciones posteriores.";
         var oldLines = Before.Replace("\r\n", "\n").Split('\n');
         var newLines = After.Replace("\r\n", "\n").Split('\n');
         var prefix = 0;
@@ -166,12 +189,25 @@ internal sealed class ChangeStore
         item.Save(); Items.Add(item); Changed?.Invoke(item); return item;
     }
     internal ProposedChange Get(string id) => Items.FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException("No existe ese cambio en el proyecto abierto.");
+    internal ProposedChange ProposeArtifact(string path, string format, string content, string reason, string? expectedHash = null)
+    {
+        if (Path.GetExtension(path).TrimStart('.').ToLowerInvariant() != format.ToLowerInvariant()) throw new ArgumentException("La extensión debe coincidir con el formato.");
+        var target = _workspace.Resolve(path); var before = File.Exists(target) ? _workspace.ReadBytes(path) : null;
+        if (expectedHash is null ? before is not null : before is null || AppPaths.Hash(before) != expectedHash) throw new IOException("Lee el documento actual antes de proponer una sustitución; cambió desde la última lectura.");
+        var after = ArtifactTools.Create(format, content);
+        if (before is not null && before.SequenceEqual(after)) throw new IOException("La propuesta no cambia el documento.");
+        foreach (var old in Items.Where(c => c.Path.Equals(path, StringComparison.OrdinalIgnoreCase) && c.Status == "pending")) { old.Status = "superseded"; old.Save(); }
+        var item = new ProposedChange { Project = _workspace.Root, Path = path, ArtifactFormat = format, Before = before is null ? "No existe" : "SHA-256 " + AppPaths.Hash(before), After = content,
+            BeforeHash = before is null ? null : AppPaths.Hash(before), BeforeBinary = before is null ? null : Convert.ToBase64String(before), AfterBinary = Convert.ToBase64String(after), Reason = reason };
+        item.Save(); Items.Add(item); Changed?.Invoke(item); return item;
+    }
     internal void Apply(string id)
     {
         var item = Get(id);
         if (item.Status != "pending") throw new InvalidOperationException("Este cambio ya no está pendiente.");
-        _workspace.Write(item.Path, item.After, item.BeforeHash, item.Bom, item.Newline);
-        item.AppliedHash = _workspace.Read(item.Path).Hash; item.Status = "applied"; item.Save(); Changed?.Invoke(item);
+        if (item.ArtifactFormat is not null) _workspace.WriteBytes(item.Path, Convert.FromBase64String(item.AfterBinary!), item.BeforeHash);
+        else _workspace.Write(item.Path, item.After, item.BeforeHash, item.Bom, item.Newline);
+        item.AppliedHash = AppPaths.Hash(_workspace.ReadBytes(item.Path)); item.Status = "applied"; item.Save(); Changed?.Invoke(item);
     }
     internal void Reject(string id) { var item = Get(id); if (item.Status != "pending") throw new InvalidOperationException("Este cambio ya no está pendiente."); item.Status = "rejected"; item.Save(); Changed?.Invoke(item); }
     internal void Undo(string id)
@@ -184,6 +220,7 @@ internal sealed class ChangeStore
             if (AppPaths.Hash(File.ReadAllBytes(path)) != item.AppliedHash) throw new InvalidOperationException("El archivo cambió después; se conserva tu edición.");
             File.Delete(path);
         }
+        else if (item.ArtifactFormat is not null) _workspace.WriteBytes(item.Path, Convert.FromBase64String(item.BeforeBinary!), item.AppliedHash);
         else _workspace.Write(item.Path, item.Before, item.AppliedHash, item.Bom, item.Newline);
         item.Status = "undone"; item.Save(); Changed?.Invoke(item);
     }

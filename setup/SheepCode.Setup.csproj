@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <Version>0.3.0</Version>
     <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>SheepCode.Setup</AssemblyName>
     <SheepAppRoot Condition="Exists('..\app\SheepCode.csproj')">..\app</SheepAppRoot>

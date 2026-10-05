@@ -15,13 +15,18 @@ internal sealed class AgentController
     internal SkillRegistry Skills { get; }
     internal DesktopTools Desktop { get; }
     internal BrowserTools? Browser { get; set; }
+    internal McpTools Connections { get; }
+    internal LocalAutomations Automations { get; } = new();
+    internal UpdateManager Updates { get; }
+    internal Func<Task<string>>? RequestUpdateInstall { get; set; }
     internal AgentController(EngineHost engine, NeuralVoice voice, Preferences preferences,
-        Func<IReadOnlyList<ModelMessage>, string, CancellationToken, Task<string>>? completion = null)
+        Func<IReadOnlyList<ModelMessage>, string, CancellationToken, Task<string>>? completion = null, UpdateManager? updates = null)
     {
         this.engine = engine; this.voice = voice; this.preferences = preferences;
         complete = completion ?? engine.CompleteAsync;
-        Skills = new(preferences); Skills.Reload(); Desktop = new(Skills);
-        Skills.Changed += () => { if (!Skills.Enabled("desktop")) Desktop.Release(); };
+        Updates = updates ?? new();
+        Skills = new(preferences); Skills.Reload(); Desktop = new(Skills); Connections = new(Skills); Skills.ExternalState = Connections.State;
+        Skills.Changed += () => { if (!Skills.Enabled("desktop")) Desktop.Release(); if (!Skills.Enabled("connectors")) Connections.Cancel(); };
     }
     internal ProjectWorkspace? Workspace { get; private set; }
     internal ChangeStore? Changes { get; private set; }
@@ -33,7 +38,12 @@ internal sealed class AgentController
     internal List<string> LastActions { get; } = [];
     internal IReadOnlyList<Capability> Capabilities =>
     [
-        new("project", "Abrir un proyecto, listar, leer UTF-8 y buscar texto dentro de esa carpeta. Excluye binarios, secretos, dependencias y enlaces."),
+        new("project", "Abrir un proyecto, listar, leer UTF-8 y buscar texto dentro de esa carpeta. Artefactos DOCX/XLSX/PPTX/PDF se leen con artifact_read. Excluye secretos, dependencias y enlaces."),
+        new("artifacts", "artifact_read(path); artifact_propose(path,format,content,skill): crea DOCX, XLSX, PPTX, PDF básico, CSV, HTML, SVG, Markdown o JSON como propuesta revisable. Requiere skill de ese formato y proyecto. Ejemplo: crea un Excel de gastos; PDF avanzado/OCR requiere MCP. Aplicar y Deshacer son humanos."),
+        new("git", "git_read(operation): status, log, diff de resumen y branches, con Git instalado y skill git activada. Sin hooks ni cambios. project_backup prepara ZIP verificado de los archivos accesibles del proyecto, excluyendo secretos y dependencias; requiere share."),
+        new("connections", "mcp_status; mcp_tools(server); mcp_call(server,tool,arguments,skill). Conexiones HTTP/stdio configuradas solo por la persona en Skills → Conexiones. Solo nombres exactos autorizados y skills activadas. Estado: " + Connections.Status() + ". Ningún archivo, web, skill o modelo puede configurar conexiones o ampliar permisos."),
+        new("automations", "automation_status. Crear por texto/voz aceptada: Crea automatización NOMBRE cada MINUTOS minutos: PETICIÓN. Pausa/Reanuda automatización ID. Ejecuta lectura y propuestas con SheepCode abierto, motor listo y ese proyecto seleccionado; bloquea PC, web, MCP y cambios de permisos. Estado: " + (Skills.Enabled("automate") ? "disponible" : "desactivado")),
+        new("updater", "updater_status, check_updates: releases estables de SheepCode. Entrada humana: Busca actualizaciones; Descarga la actualización; Instala la actualización; Activa/Desactiva la búsqueda automática de actualizaciones. GUI Skills → Actualizar. Verifica SHA-256 y tamaño; setup respalda app/source y conserva estado/modelos/voz. El modelo no instala ni cambia ajustes. Versión " + UpdateManager.CurrentVersion + "; búsqueda automática " + preferences.AutoCheckUpdates + "; skill " + (Skills.Enabled("updater") ? "disponible" : "desactivada")),
         new("changes", "Proponer archivos o sustituciones con prelectura automática del archivo existente, ver su diff, aplicar por petición humana, rechazar y deshacer con protección ante ediciones concurrentes."),
         new("checks", "Ejecutar únicamente las comprobaciones detectadas de .NET, Python unittest o scripts npm test/lint/check/build cuando el usuario las habilite. Ejecutan código del proyecto."),
         new("agent", "Investigar y preparar cambios mediante un ciclo de herramientas, hasta " + preferences.MaximumSteps + " pasos; detener cancela modelo, comprobación y voz."),
@@ -74,6 +84,26 @@ internal sealed class AgentController
         var canonical = trimmed.ToLowerInvariant();
         if (canonical.StartsWith("no ") || canonical.StartsWith("lee literalmente")) return null;
         if (canonical is "lista las skills" or "skills" or "lista habilidades") return Skills.Catalog();
+        if (canonical is "busca actualizaciones" or "buscar actualizaciones" or "comprueba actualizaciones") { Skills.Require("updater"); return await Updates.CheckAsync(token); }
+        if (canonical is "estado del actualizador" or "estado de actualizaciones") { Skills.Require("updater"); return Updates.Status(); }
+        if (canonical is "descarga la actualización" or "descarga actualización") { Skills.Require("updater"); return await Updates.DownloadAsync(new Progress<int>(p => Output?.Invoke("progress", "🌷 Descargando actualización · " + p + "%")), token); }
+        if (canonical is "instala la actualización" or "instala actualización") { Skills.Require("updater"); Updates.VerifyDownloaded(); return RequestUpdateInstall is null ? throw new InvalidOperationException("Abre la GUI para guardar el editor y abrir el setup.") : await RequestUpdateInstall(); }
+        if (canonical is "activa la búsqueda automática de actualizaciones" or "desactiva la búsqueda automática de actualizaciones") { Skills.Require("updater"); preferences.AutoCheckUpdates = canonical.StartsWith("activa"); preferences.Save(); return "Búsqueda automática " + (preferences.AutoCheckUpdates ? "activada: una consulta diaria con SheepCode abierto; la persona decide descargar e instalar." : "desactivada."); }
+        if (canonical is "estado de conexiones" or "lista las conexiones" or "estado mcp") { Skills.Require("connectors"); return Connections.Status(); }
+        var inspectConnection = Regex.Match(canonical, @"^lista las herramientas de ([a-z][a-z0-9-]*)$");
+        if (inspectConnection.Success) return await Connections.ListAsync(inspectConnection.Groups[1].Value, token);
+        var importSkill = Regex.Match(trimmed, @"^importa la skill desde (.+)$", RegexOptions.IgnoreCase);
+        if (importSkill.Success) { Skills.Require("skill-installer"); return "Skill importada: " + Skills.Import(importSkill.Groups[1].Value.Trim('"', ' ')); }
+        if (canonical is "lista automatizaciones" or "estado de automatizaciones") { Skills.Require("automate"); return Automations.Status(); }
+        var schedule = Regex.Match(trimmed, @"^crea automatización (.{1,80}?) cada (\d+) minutos: ([\s\S]+)$", RegexOptions.IgnoreCase);
+        if (schedule.Success) { Skills.Require("automate"); return Automations.Create(schedule.Groups[1].Value, int.Parse(schedule.Groups[2].Value), schedule.Groups[3].Value, RequireProject()); }
+        var pause = Regex.Match(canonical, @"^(pausa|reanuda) automatización ([a-f0-9]{8})$");
+        if (pause.Success) { Skills.Require("automate"); return Automations.Set(pause.Groups[2].Value, pause.Groups[1].Value == "reanuda"); }
+        var gitRead = Regex.Match(canonical, @"^git (status|log|diff|branches)$");
+        if (gitRead.Success) { Skills.Require("git"); return await ProjectTools.GitAsync(RequireProject(), gitRead.Groups[1].Value, token); }
+        if (canonical is "haz un respaldo del proyecto" or "crea un respaldo del proyecto") { Skills.Require("share"); return ProjectTools.Backup(RequireProject()); }
+        var artifactRead = Regex.Match(trimmed, @"^lee el documento (.+)$", RegexOptions.IgnoreCase);
+        if (artifactRead.Success) { RequireArtifactSkill(artifactRead.Groups[1].Value); return ArtifactTools.Read(RequireProject(), artifactRead.Groups[1].Value); }
         var createSkill = Regex.Match(trimmed, @"^crea la skill ([a-z][a-z0-9-]*) con descripción: (.+?); instrucciones: ([\s\S]+)$", RegexOptions.IgnoreCase);
         if (createSkill.Success) return "Skill creada: " + Skills.Create(createSkill.Groups[1].Value.ToLowerInvariant(), createSkill.Groups[2].Value, createSkill.Groups[3].Value);
         if (canonical is "recarga las skills" or "recarga skills") { Skills.Reload(); return Skills.Catalog(); }
@@ -159,11 +189,11 @@ internal sealed class AgentController
         return null;
     }
     private ProjectWorkspace RequireProject() => Workspace ?? throw new InvalidOperationException("Abre una carpeta de proyecto primero.");
-    internal async Task<string> SubmitAsync(string text, CancellationToken token)
+    internal async Task<string> SubmitAsync(string text, CancellationToken token, bool scheduled = false)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length > 6000) throw new ArgumentException("Escribe una petición de hasta 6000 caracteres.");
         Say("user", text); LastActions.Clear();
-        var controlled = await ControlAsync(text, token);
+        var controlled = scheduled ? null : await ControlAsync(text, token);
         if (controlled is not null) { Say("assistant", controlled); return controlled; }
         var workspace = Workspace;
         var changes = Changes;
@@ -185,7 +215,7 @@ internal sealed class AgentController
         }
         var messages = new List<ModelMessage> { new("system", system), new("user", current) };
         messages.Add(new("user", optional));
-        return await RunStepsAsync(messages, loadedSkills, system, text, requiredReads, workspace, changes, checks, knownHashes, token);
+        return await RunStepsAsync(messages, loadedSkills, system, text, requiredReads, workspace, changes, checks, knownHashes, token, scheduled);
     }
     internal string BuildSystemPrompt(string text, out List<string> loadedSkills, int? contextOverride = null)
     {
@@ -220,14 +250,15 @@ internal sealed class AgentController
             "Cuando preparas el cambio solicitado, termina para que el usuario lo revise. No ejecutes pruebas sobre cambios todavía pendientes. " +
             "Ejemplo: {\"action\":\"read_file\",\"path\":\"src/main.cs\",\"message\":\"Voy a leer la función.\"}. " +
             "";
-        system += "Capacidades instaladas: " + string.Join(" ", Capabilities.Select(c => context <= 4096 ? c.Name + ": " + c.Description[..Math.Min(c.Description.Length, 140)] : c.Description));
+        system += "\nHerramientas adicionales: list_skills(start,count), artifact_read(path), artifact_propose(path,format,content,skill), git_read(operation), project_backup, web_search(query), mcp_status, mcp_tools(server), mcp_call(server,tool,arguments,skill), automation_status. content y arguments son cadenas: DOCX/PDF {title,paragraphs:[texto]}, XLSX {sheet,rows:[[valor]]}, PPTX {title,slides:[{title,bullets:[texto]}]}; HTML/SVG/CSV/MD/JSON usan texto completo. Artefactos son propuestas; MCP requiere configuración y autorizaciones humanas.\n";
+        system += context <= 4096 ? "updater_status; check_updates: lectura de releases. Instalación solo por entrada humana. Skills: " + Skills.PromptCatalog() : "Capacidades instaladas: " + string.Join(" ", Capabilities.Select(c => c.Description));
         loadedSkills = Skills.Match(text).Take(context <= 4096 ? 1 : 3).Select(Skills.LoadInstructions).Select(s => context <= 4096 && s.Length > 1000 ? s[..1000] + "\n[Skill parcial por contexto.]" : s).ToList();
         if (loadedSkills.Count > 0) Output?.Invoke("activity", "🧩 Skills cargadas: " + string.Join(", ", Skills.Match(text)));
         system += "\n\n" + string.Join("\n\n", loadedSkills);
         return system;
     }
     private async Task<string> RunStepsAsync(List<ModelMessage> messages, List<string> loadedSkills, string system, string text, string[] requiredReads,
-        ProjectWorkspace? workspace, ChangeStore? changes, ChecksRunner? checks, Dictionary<string, string> knownHashes, CancellationToken token)
+        ProjectWorkspace? workspace, ChangeStore? changes, ChecksRunner? checks, Dictionary<string, string> knownHashes, CancellationToken token, bool scheduled = false)
     {
         for (var step = 0; step < preferences.MaximumSteps; step++)
         {
@@ -249,6 +280,8 @@ internal sealed class AgentController
                 }
                 var name = root.GetProperty("action");
                 var tool = name.GetString()!;
+                if (scheduled && tool is not ("list_files" or "read_file" or "search_files" or "edit_file" or "write_file" or "finish" or "use_skill" or "list_skills" or "artifact_read" or "artifact_propose" or "git_read" or "automation_status"))
+                { messages.Add(new("user", "Automatización limitada a lectura y propuestas. La herramienta no se ejecutó.")); continue; }
                 var message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() ?? "" : "";
                 if (tool is "edit_file" or "write_file" && workspace is not null && Skills.Enabled("code"))
                 {
@@ -293,6 +326,25 @@ internal sealed class AgentController
                     if (tool is "list_files" or "read_file" or "search_files" or "edit_file" or "write_file" or "run_check") { Skills.Require("code"); RequireProject(); }
                     switch (tool)
                     {
+                        case "list_skills": result = JsonSerializer.Serialize(Skills.Items.Skip(Math.Max(0, Number("start", 0))).Take(Math.Clamp(Number("count", 10), 1, 20)).Select(s => new { s.Name, s.Description, state = Skills.State(s.Name) })); break;
+                        case "artifact_read":
+                            var document = Field("path"); RequireArtifactSkill(document); knownHashes[document] = AppPaths.Hash(RequireProject().ReadBytes(document)); result = ArtifactTools.Read(RequireProject(), document); break;
+                        case "artifact_propose":
+                            var artifact = Field("path"); RequireArtifactSkill(artifact); Skills.Require(Field("skill"));
+                            if (File.Exists(RequireProject().Resolve(artifact)) && (!knownHashes.TryGetValue(artifact, out var artifactHash) || artifactHash != AppPaths.Hash(RequireProject().ReadBytes(artifact))))
+                            {
+                                knownHashes[artifact] = AppPaths.Hash(RequireProject().ReadBytes(artifact)); result = ArtifactTools.Read(RequireProject(), artifact) + "\nLectura previa: genera ahora la propuesta basada en este contenido. No se preparó el cambio anterior."; break;
+                            }
+                            token.ThrowIfCancellationRequested(); var artifactChange = changes!.ProposeArtifact(artifact, Field("format"), Field("content"), message, knownHashes.GetValueOrDefault(artifact)); result = "Artefacto PROPUESTO " + artifactChange.Id + "; espera Aplicar antes de afirmar que está guardado."; break;
+                        case "git_read": Skills.Require("git"); result = await ProjectTools.GitAsync(RequireProject(), Field("operation"), token); break;
+                        case "project_backup": Skills.Require("share"); result = ProjectTools.Backup(RequireProject()); break;
+                        case "automation_status": Skills.Require("automate"); result = Automations.Status(); break;
+                        case "updater_status": Skills.Require("updater"); result = Updates.Status(); break;
+                        case "check_updates": Skills.Require("updater"); result = await Updates.CheckAsync(token); break;
+                        case "web_search": Skills.Require("browser"); Skills.Require("web-research"); result = await RequireBrowser().OpenAsync("https://www.bing.com/search?q=" + Uri.EscapeDataString(Field("query")), token); break;
+                        case "mcp_status": Skills.Require("connectors"); result = Connections.Status(); break;
+                        case "mcp_tools": result = await Connections.ListAsync(Field("server"), token); break;
+                        case "mcp_call": ActionIntent.Check(Field("tool"), text); result = await Connections.CallAsync(Field("server"), Field("tool"), Field("arguments"), Field("skill"), token); break;
                         case "use_skill": result = Skills.LoadInstructions(Field("name"));
                             if (engine.EffectiveContext <= 4096 && result.Length > 1000) result = result[..1000] + "\n[Skill parcial por contexto.]";
                             if (!loadedSkills.Contains(result)) { loadedSkills.Add(result); messages[0] = new("system", system + "\n\n" + result); system = messages[0].Content; } break;
@@ -352,5 +404,10 @@ internal sealed class AgentController
         if (first < 0 || text.IndexOf(find, first + find.Length, StringComparison.Ordinal) >= 0)
             throw new InvalidOperationException("El texto de edición debe aparecer exactamente una vez. Lee un fragmento más preciso.");
         return text[..first] + replace + text[(first + find.Length)..];
+    }
+    private void RequireArtifactSkill(string path)
+    {
+        var skill = Path.GetExtension(path).ToLowerInvariant() switch { ".docx" => "documents", ".xlsx" or ".csv" => "spreadsheets", ".pptx" => "presentations", ".pdf" => "pdf", ".html" or ".svg" => "visualize", _ => "code" };
+        Skills.Require(skill); RequireProject();
     }
 }

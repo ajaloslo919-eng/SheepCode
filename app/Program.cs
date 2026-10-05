@@ -6,6 +6,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Contains("--cancellation-helper")) { Thread.Sleep(60000); return 0; }
+        if (args.Contains("--mcp-fixture")) return CatalogDiagnostics.McpFixture();
         if (args.Length == 2 && args[0] == "--write-brand-icon") { MascotBanner.SaveBrandIcon(args[1]); return 0; }
         if (args.Contains("--pc-helper"))
         {
@@ -13,6 +14,13 @@ internal static class Program
         }
         if (args.Contains("--pc-fixture")) { ApplicationConfiguration.Initialize(); Application.Run(SkillDiagnostics.CreatePcFixture()); return 0; }
         AppPaths.Initialize();
+        if (args.Length > 0 && args[0] == "--apply-update") return UpdateManager.RunHandoff(args);
+        if (args.Contains("--catalog-check")) return CatalogDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Contains("--update-check"))
+        {
+            try { using var updater = new UpdateManager(); var message = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult(); AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "updater-live.json"), new { status = "complete", message, state = updater.Status(), scope = "Consulta HTTP real de la última release pública de SheepCode; sin instalar ni ejecutar IA." }); return 0; }
+            catch (Exception e) { AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "updater-live.json"), new { status = "failed", error = e.Message }); return 1; }
+        }
         if (args.Contains("--self-test")) return Diagnostics.SelfTestAsync().GetAwaiter().GetResult();
         if (args.Contains("--protocol-check")) return ProtocolDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--workflow-check")) { ApplicationConfiguration.Initialize(); return WorkflowDiagnostics.Run(); }
@@ -28,6 +36,15 @@ internal static class Program
         var savedPreferenceBytes = File.Exists(Preferences.PathName) ? File.ReadAllBytes(Preferences.PathName) : null;
         var voice = new NeuralVoice(); var engine = new EngineHost(voice); var agent = new AgentController(engine, voice, preferences);
         using var form = new MainForm(preferences, voice, engine, agent);
+        if (args.Contains("--integrations-ui-check"))
+        {
+            form.Shown += async (_, _) =>
+            {
+                try { await Task.Delay(120); var state = form.CheckIntegrationsGui(); form.CaptureWindow(Path.Combine(AppPaths.Root, "checks", "skills-catalog-gui.png")); AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "integrations-gui.json"), new { status = "complete", state, scope = "GUI real con catálogo, filtro y diálogo de actualizador; sin consulta externa ni IA." }); }
+                catch (Exception e) { AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "integrations-gui.json"), new { status = "failed", error = e.ToString() }); }
+                finally { form.Close(); }
+            };
+        }
         if (args.Contains("--laptop-ui-check"))
         {
             form.Shown += async (_, _) =>
@@ -119,7 +136,7 @@ internal static class Program
         catch (Exception e) { File.WriteAllText(Path.Combine(AppPaths.Logs, "gui-error.log"), e.ToString()); MessageBox.Show(e.Message, "SheepCode"); return 1; }
         finally
         {
-            if (args.Any(a => a is "--ui-check" or "--ui-agent-check" or "--skills-check" or "--skills-agent-check" or "--laptop-ui-check"))
+            if (args.Any(a => a is "--ui-check" or "--ui-agent-check" or "--skills-check" or "--skills-agent-check" or "--laptop-ui-check" or "--integrations-ui-check"))
             { if (savedPreferenceBytes is not null) File.WriteAllBytes(Preferences.PathName, savedPreferenceBytes); else System.Text.Json.JsonSerializer.Deserialize<Preferences>(savedPreferences, AppPaths.Json)!.Save(); }
             engine.DisposeAsync().AsTask().GetAwaiter().GetResult(); voice.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }

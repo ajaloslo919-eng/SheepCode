@@ -26,6 +26,7 @@ internal static class SetupProgram
             }
             catch (Exception e) { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "install-test-error.txt"), e.ToString()); return 1; }
         }
-        using var form = new SetupForm(args.Contains("--preview")); Application.Run(form); return 0;
+        var targetIndex = Array.IndexOf(args, "--target");
+        using var form = new SetupForm(args.Contains("--preview"), target: targetIndex >= 0 && targetIndex + 1 < args.Length ? args[targetIndex + 1] : null, upgrade: args.Contains("--upgrade")); Application.Run(form); return 0;
     }
 }

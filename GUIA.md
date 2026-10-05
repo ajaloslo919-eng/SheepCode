@@ -43,7 +43,39 @@ Instala el SDK .NET 8 para recompilar el código C#. En `source`, ejecuta `build
 
 ## Herramientas y comandos
 
-Las skills de código, PC, navegador y modelos se activan desde Skills. Para controlar el PC, elige una ventana; para webs, usa las pestañas integradas. El texto de archivos y páginas no puede activar permisos ni aplicar cambios.
+El panel **Skills** muestra 55 habilidades, un buscador, sus instrucciones y su estado. Algunas tienen herramientas locales; otras preparan código y configuración; las que usan servicios externos necesitan MCP. Puedes activarlas, desactivarlas, crear nuevas e importar un `SKILL.md` local. El catálogo adaptado se mantiene en `source/packaging/skills-catalog.json`; `sync-skills.ps1` regenera las 51 añadidas, conservando las cuatro base. La importación copia instrucciones: scripts, referencias y herramientas de otro entorno requieren adaptación.
+
+Para controlar el PC, elige una ventana; para webs, usa las pestañas integradas. El texto de archivos y páginas no puede activar permisos ni aplicar cambios.
+
+**Documentos y datos:** pide «Crea un DOCX con un título y tres párrafos», «Crea un Excel de gastos», «Prepara una presentación de tres diapositivas» o «Crea un PDF básico». Se muestran como propuestas; Aplicar guarda el binario y Deshacer recupera su versión anterior. El explorador ofrece una vista de contenido de DOCX/XLSX/PPTX/PDF. Word admite párrafos; Excel, valores numéricos, booleanos y texto; PowerPoint, títulos y puntos; PDF, texto latino básico. No recalcula fórmulas, no conserva formatos complejos al reconstruir un documento y no incluye OCR. Formato fino, edición avanzada, Google Docs/Slides y Excel en vivo requieren un proveedor compatible.
+
+**Git y respaldos:** `git status`, `git log`, `git diff` y `git branches` consultan el repo abierto si Git está instalado. No ejecutan hooks ni modifican el repo. `Haz un respaldo del proyecto` prepara un ZIP y verifica su hash, con máximo 2000 archivos/100 MiB. Excluye secretos, enlaces, dependencias, Git y datos internos; es una copia del proyecto accesible, no un respaldo completo del equipo.
+
+**Automatizaciones:** `Crea automatización revisar cada 15 minutos: Revisa el proyecto y prepara correcciones`. `Lista automatizaciones`, `Pausa automatización ID` y `Reanuda automatización ID` gestionan su estado. Se ejecutan con SheepCode abierto, motor listo y ese proyecto seleccionado; mínimo 5 minutos. Solo lectura y propuestas: no aplica cambios, controla PC/web, llama MCP ni cambia permisos en segundo plano.
+
+## Conexiones MCP 🔗
+
+En **Skills → Conexiones** configura una URL HTTPS (HTTP solo local) o la ruta absoluta de un `.exe` instalado con argumentos separados. Este cliente implementa inicialización, descubrimiento y llamadas de herramientas con JSON/Streamable HTTP y stdio. No incluye OAuth interactivo, sampling, elicitation o ejecución de recursos de skills. Cuentas/proveedores externos se configuran por separado. Especificación: [MCP transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
+
+Ejemplo desactivado; reemplaza la URL y los nombres por los de tu servidor:
+
+```json
+[
+  {
+    "name": "imagenes",
+    "url": "https://example.com/mcp",
+    "command": "",
+    "arguments": [],
+    "tokenEnvironment": "MI_TOKEN_MCP",
+    "skills": ["imagegen"],
+    "allowedTools": [],
+    "enabled": false,
+    "timeoutSeconds": 30
+  }
+]
+```
+
+Guarda, activa la conexión cuando esté configurada y pulsa **Ver herramientas**. Copia a `allowedTools` únicamente los nombres exactos que autorizas, sin comodines. Los tokens viven en variables de entorno, fuera del JSON y del chat. La IA no puede editar estos ajustes. Cada llamada muestra servidor, herramienta y argumentos para autorizar esa operación. **Parar** cancela la petición y termina servidores stdio iniciados por SheepCode. No se repiten llamadas externas tras un fallo.
 
 Comandos de texto, también utilizables tras aceptar un dictado:
 
@@ -53,7 +85,11 @@ Una instalación de modelo nueva guarda el perfil anterior cuando existe, y solo
 
 ## Actualizar, respaldo y quitar la aplicación
 
-Vuelve a ejecutar el setup con SheepCode cerrado. Guarda respaldos de `app` y `source` en `backups` antes de sustituirlos. Conserva ajustes, skills, sesiones, propuestas y modelos. Si tu `source` contiene ediciones, se conserva su versión anterior en ese respaldo.
+Abre **Skills → Actualizar** o escribe/dicta y acepta `Busca actualizaciones`, `Descarga la actualización` y `Instala la actualización`. Busca releases estables del repositorio público, verifica tamaño, SHA-256 y digest de GitHub cuando esté disponible, y vuelve a comprobar el archivo antes de ejecutarlo. La descarga se conserva en caché entre aperturas. Si se corta, puedes repetirla; el actualizador de setups no reanuda `.part`.
+
+Al instalar se pide guardar el editor si tiene cambios y se cierra SheepCode antes de abrir el setup con la carpeta actual seleccionada. El modo actualización cambia app/source y **no descarga ni sustituye modelos**. El setup guarda la versión anterior de app/source en `backups`; conserva ajustes, conexiones, skills, sesiones, propuestas, dictado, modelos y voz. Puedes revisar las ediciones antiguas de `source` en ese respaldo.
+
+La búsqueda automática viene desactivada. Actívala con el checkbox o `Activa la búsqueda automática de actualizaciones`; consulta una vez al día mientras la app está abierta y avisa cuando haya una nueva release. `Desactiva la búsqueda automática de actualizaciones` la retira. Descargar e instalar siguen siendo acciones humanas. `Desactiva la skill updater` bloquea sus herramientas. También puedes abrir un setup descargado manualmente con `--target "D:\SheepCode" --upgrade`.
 
 Las páginas largas se leen por fragmentos para caber en el contexto del modelo y dejar espacio para su respuesta. El agente conserva la pestaña y puede pedir otras partes con `browser_read`. Si intenta modificar un archivo existente sin haberlo leído, SheepCode lo lee primero y solicita una propuesta basada en ese contenido. El archivo sigue requiriendo **Aplicar**. **Parar** cancela la petición y termina el proceso propio del motor para cortar la generación; la siguiente tarea vuelve a cargarlo. Los cambios ya propuestos se conservan para revisión.
 

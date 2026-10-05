@@ -6,6 +6,11 @@ internal sealed partial class MainForm
 {
     private readonly FlowLayoutPanel _skillCards = new() { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = true, FlowDirection = FlowDirection.LeftToRight, BackColor = Background, Padding = new(6) };
     private readonly RichTextBox _skillText = CodeBox(true), _modelText = CodeBox(true);
+    private readonly TextBox _skillFilter = new() { Dock = DockStyle.Fill, BackColor = Surface, ForeColor = Foreground, PlaceholderText = "🔍 Buscar skills: documentos, Git, imágenes…" };
+    private readonly Label _skillCount = LabelFor("🧩 Skills", 11);
+    private bool _updateInstallRequested, _autoUpdateChecking;
+    private DateTimeOffset _nextUpdateCheck = DateTimeOffset.UtcNow.AddSeconds(15);
+    private readonly CancellationTokenSource _backgroundCancellation = new();
     private readonly ComboBox _windows = new() { Width = 320, DropDownStyle = ComboBoxStyle.DropDownList, DisplayMember = nameof(PcWindow.Title) };
     private readonly ListBox _pcNodes = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, BackColor = Background, ForeColor = Foreground, Font = new("Segoe UI", 10) };
     private readonly Label _pcScope = LabelFor("🌸 Elige una ventana para que Sheep pueda ayudarte en ella.", 10);
@@ -20,15 +25,22 @@ internal sealed partial class MainForm
 
     private void BuildWorkbench()
     {
-        var skills = NewPage("Skills"); skills.AutoScroll = true; var layout = Stack(66, -1, 96, 48); layout.Padding = new(8); layout.Dock = DockStyle.Top; layout.Height = 480;
-        var introduction = LabelFor("🧩 La caja de habilidades de Sheep\nActiva sus herramientas y descubre instrucciones para cada tarea.", 11); introduction.ForeColor = Accent;
-        layout.Controls.Add(introduction, 0, 0); layout.Controls.Add(_skillCards, 0, 1);
-        _skillText.Font = new("Segoe UI", 10); _skillText.WordWrap = true; layout.Controls.Add(_skillText, 0, 2);
-        Button refresh = ButtonFor("↻ Recargar"), create = ButtonFor("🌸 Crear skill", true), capabilities = ButtonFor("Qué puedo hacer");
+        var skills = NewPage("Skills"); skills.AutoScroll = true; var layout = Stack(66, 40, -1, 80, 84); layout.Padding = new(8); layout.Dock = DockStyle.Fill; layout.MinimumSize = new(0, 420);
+        _skillCount.ForeColor = Accent;
+        layout.Controls.Add(_skillCount, 0, 0); layout.Controls.Add(_skillFilter, 0, 1); layout.Controls.Add(_skillCards, 0, 2);
+        _skillFilter.TextChanged += (_, _) => RefreshSkills();
+        _skillText.Font = new("Segoe UI", 10); _skillText.WordWrap = true; layout.Controls.Add(_skillText, 0, 3);
+        Button refresh = ButtonFor("↻ Recargar"), create = ButtonFor("🌸 Crear skill", true), capabilities = ButtonFor("Qué puedo hacer"), import = ButtonFor("📦 Importar"), connections = ButtonFor("🔗 Conexiones"), updates = ButtonFor("🌷 Actualizar");
         refresh.Click += (_, _) => Guard(_agent.Skills.Reload); create.Click += (_, _) => CreateSkillDialog(); capabilities.Click += (_, _) => ShowCapabilities();
-        layout.Controls.Add(Flow(refresh, create, capabilities), 0, 3); skills.Controls.Add(layout);
+        import.Click += (_, _) => { using var picker = new OpenFileDialog { Filter = "Skill (*.md)|*.md", Title = "Importar instrucciones SKILL.md" }; if (picker.ShowDialog(this) == DialogResult.OK) Guard(() => { _agent.Skills.Require("skill-installer"); AppendChat("assistant", "Skill importada: " + _agent.Skills.Import(picker.FileName)); }); };
+        connections.Click += (_, _) => ConnectionsDialog(); updates.Click += (_, _) => UpdatesDialog();
+        var quickUpdate = ButtonFor("🌷 Actualizar"); quickUpdate.Click += (_, _) => UpdatesDialog(); _toolbar.Controls.Add(quickUpdate); _toolbar.Controls.SetChildIndex(quickUpdate, 3);
+        var actions = Flow(refresh, create, import, connections, updates, capabilities); actions.WrapContents = true; layout.Controls.Add(actions, 0, 4); skills.Controls.Add(layout);
+        _agent.Connections.ApproveCall = ApproveConnectionCallAsync;
+        _agent.Connections.MediaReceived += (path, mime) => Ui(() => ShowMcpMedia(path, mime));
+        _agent.RequestUpdateInstall = () => { _agent.Updates.VerifyDownloaded(); _updateInstallRequested = true; BeginInvoke(Close); return Task.FromResult("🌷 Cerrando SheepCode para abrir el setup. Guarda cualquier archivo pendiente en el aviso del editor."); };
         _agent.Skills.Changed += () => Ui(() => { RefreshSkills(); if (_busy) _taskCancellation?.Cancel(); });
-        _skillCards.Resize += (_, _) => { foreach (Control card in _skillCards.Controls) card.Width = Math.Max(216, (_skillCards.ClientSize.Width - 36) / 2); };
+        _skillCards.Resize += (_, _) => { foreach (Control card in _skillCards.Controls) card.Width = SkillCardWidth(); };
         RefreshSkills();
 
         var desktop = NewPage("PC"); desktop.AutoScroll = true; var pc = Stack(65, 48, 48, -1, 88); pc.Padding = new(8); pc.Dock = DockStyle.Top; pc.Height = 500;
@@ -78,7 +90,7 @@ internal sealed partial class MainForm
         model.Controls.Add(Flow(powerLabel, _powerMode), 0, 3);
         _modelText.WordWrap = true; _modelText.Font = new("Consolas", 10); model.Controls.Add(_modelText, 0, 4); models.Controls.Add(model);
         _tabs.TabPages.Add(_compactFiles);
-        _modelTimer.Interval = 5000; _modelTimer.Tick += (_, _) => { _engine.RefreshPowerPriority(); if (_tabs.SelectedIndex == 6) RefreshModels(); }; _modelTimer.Start(); RefreshModels();
+        _modelTimer.Interval = 5000; _modelTimer.Tick += async (_, _) => { _engine.RefreshPowerPriority(); if (_tabs.SelectedIndex == 6) RefreshModels(); RunDueAutomation(); await AutoCheckUpdateAsync(); }; _modelTimer.Start(); RefreshModels();
     }
     private Panel NewPage(string name) { var page = new Panel { Text = name, BackColor = Background, Padding = new(6) }; _tabs.TabPages.Add(page); return page; }
     private void OpenWeb() { var url = _address.Text.Trim(); StartTask(async token => { await _browserTools.OpenAsync(url, token); }); }
@@ -89,17 +101,41 @@ internal sealed partial class MainForm
     }
     private void RefreshSkills()
     {
+        _skillCount.Text = "🧩 " + _agent.Skills.Items.Count + " habilidades para Sheep & Kuky\nHerramientas locales, flujos de código y proveedores MCP configurables 🌸";
         foreach (Control old in _skillCards.Controls.Cast<Control>().ToArray()) old.Dispose(); _skillCards.Controls.Clear();
-        foreach (var skill in _agent.Skills.Items)
+        foreach (var skill in _agent.Skills.Items.Where(s => (s.Name + " " + s.Description).Contains(_skillFilter.Text.Trim(), StringComparison.OrdinalIgnoreCase)))
         {
-            var card = new Panel { Width = Math.Max(216, (_skillCards.ClientSize.Width - 36) / 2), Height = 130, BackColor = Surface, Padding = new(8), Margin = new(0, 0, 8, 8) };
-            var toggle = new CheckBox { Text = skill.Emoji + "  " + skill.Name.ToUpperInvariant(), Checked = _agent.Skills.Enabled(skill.Name), ForeColor = Accent, Font = new("Segoe UI", 11, FontStyle.Bold), AutoSize = true, Location = new(12, 10) };
+            var card = new Panel { Width = SkillCardWidth(), Height = 164, BackColor = Surface, Padding = new(8), Margin = new(0, 0, 8, 8) };
+            var toggle = new CheckBox { Text = skill.Emoji + "  " + skill.Name, Checked = _agent.Skills.Enabled(skill.Name), ForeColor = Accent, Font = new("Segoe UI", 10, FontStyle.Bold), AutoSize = false, AutoEllipsis = true, Location = new(12, 8), Size = new(card.Width - 84, 36), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             toggle.CheckedChanged += (_, _) => Guard(() => _agent.Skills.SetEnabled(skill.Name, toggle.Checked)); card.Controls.Add(toggle);
             var details = ButtonFor("Ver"); details.Anchor = AnchorStyles.Top | AnchorStyles.Right; details.Location = new(card.Width - 66, 5); details.Width = 56; details.Click += (_, _) => _skillText.Text = skill.Path + "\n\n" + skill.Instructions; card.Controls.Add(details);
-            var description = LabelFor(skill.Description, 9); description.Dock = DockStyle.None; description.SetBounds(12, 45, card.Width - 24, 80); description.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; description.AutoEllipsis = false; card.Controls.Add(description); _skillCards.Controls.Add(card);
+            var state = LabelFor(_agent.Skills.State(skill.Name), 8); state.Dock = DockStyle.None; state.SetBounds(12, 43, card.Width - 24, 32); state.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; state.AutoEllipsis = false; card.Controls.Add(state);
+            var description = LabelFor(skill.Description, 9); description.Dock = DockStyle.None; description.SetBounds(12, 79, card.Width - 24, 77); description.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; description.AutoEllipsis = false; card.Controls.Add(description); _skillCards.Controls.Add(card);
         }
         if (_agent.Skills.Errors.Count > 0) _skillText.Text = string.Join('\n', _agent.Skills.Errors);
         else if (_skillText.TextLength == 0) _skillText.Text = "🐱 Kuky tip: usa $code, $desktop, $browser o $models en el chat.\n\nTus nuevas skills se guardan en " + Path.Combine(AppPaths.State, "skills") + ". Son instrucciones; las herramientas y permisos los controla SheepCode.";
+    }
+    private int SkillCardWidth() => Math.Max(216, (_skillCards.ClientSize.Width - 30) / (_skillCards.ClientSize.Width < 530 ? 1 : 2));
+    private void RunDueAutomation()
+    {
+        if (_busy || _checking || _closing || !_engine.Ready || !_agent.Skills.Enabled("automate")) return;
+        var item = _agent.Automations.Due(_agent.Workspace?.Root, DateTimeOffset.UtcNow); if (item is null) return;
+        item.Next = DateTimeOffset.UtcNow.AddMinutes(item.Minutes); _agent.Automations.Save();
+        StartTask(async token =>
+        {
+            try { AppendChat("tool", "⏰ Automatización: " + item.Name); var result = await _agent.SubmitAsync(item.Prompt, token, scheduled: true); item.LastResult = result[..Math.Min(1000, result.Length)]; }
+            catch (OperationCanceledException) { item.LastResult = "Detenida por la persona."; throw; }
+            catch (Exception e) { item.LastResult = "Falló: " + e.Message; throw; }
+            finally { _agent.Automations.Save(); }
+        });
+    }
+    private async Task AutoCheckUpdateAsync()
+    {
+        if (_busy || _checking || _closing || _autoUpdateChecking || !_preferences.AutoCheckUpdates || !_agent.Skills.Enabled("updater") || DateTimeOffset.UtcNow < _nextUpdateCheck) return;
+        _autoUpdateChecking = true; _nextUpdateCheck = DateTimeOffset.UtcNow.AddDays(1);
+        try { var result = await _agent.Updates.CheckAsync(_backgroundCancellation.Token); if (!_closing && !IsDisposed && _agent.Updates.Available is not null) AppendChat("assistant", result); }
+        catch (Exception e) { _nextUpdateCheck = DateTimeOffset.UtcNow.AddMinutes(30); if (!_closing && !IsDisposed && e is not OperationCanceledException) AppendChat("error", "Actualizador: " + e.Message); }
+        finally { _autoUpdateChecking = false; }
     }
     private void CreateSkillDialog()
     {

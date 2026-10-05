@@ -12,15 +12,17 @@ internal sealed class SetupForm : Form
     private readonly Label description = Label("", 10), step = Label("01 · Bienvenido a tu pequeño taller", 13);
     private readonly Button rescan = Button("↻ Volver a detectar");
     private readonly SystemHardware? hardwareFixture;
+    private readonly bool upgrading;
     private readonly RichTextBox log = new() { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Surface, ForeColor = Ink, Font = new("Segoe UI", 9) };
     private readonly ProgressBar progress = new() { Dock = DockStyle.Fill, Height = 10, Style = ProgressBarStyle.Continuous };
     private readonly CheckBox desktop = new() { Text = "🐑 Acceso directo en el escritorio", AutoSize = true, Checked = true, ForeColor = Ink }, menu = new() { Text = "🌸 Acceso en el menú Inicio", AutoSize = true, Checked = true, ForeColor = Ink };
     private readonly CheckBox dictation = new() { Text = "🎙 Dictado local · 181 MB", AutoSize = true, Checked = true, ForeColor = Ink };
     private readonly Button install = Button("🌸 Preparar mi taller", true), cancel = Button("Cerrar"), open = Button("🐑 Abrir SheepCode", true);
     private SystemHardware? system; private InstallPlan? recommended; private CancellationTokenSource? cancellation; private bool busy, completed;
-    internal SetupForm(bool preview, SystemHardware? fixture = null)
+    internal SetupForm(bool preview, SystemHardware? fixture = null, string? target = null, bool upgrade = false)
     {
         hardwareFixture = fixture;
+        upgrading = upgrade;
         Text = "🐑 SheepCode Setup · Sheep & Kuky 🌸"; var screen = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 900);
         Size = new(Math.Min(990, screen.Width - 20), Math.Min(900, screen.Height - 20)); MinimumSize = new(760, 540); StartPosition = FormStartPosition.CenterScreen;
         BackColor = Bg; ForeColor = Ink; Font = new("Segoe UI", 10); AutoScaleMode = AutoScaleMode.Dpi;
@@ -33,6 +35,14 @@ internal sealed class SetupForm : Form
         step.ForeColor = Pink; layout.Controls.Add(step, 0, 1);
         layout.Controls.Add(Label("Código abierto y editable incluido · IA local para tu equipo\nElige dónde guardar tu taller y sus modelos. El setup analiza el PC por ti.", 10), 0, 2);
         location.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SheepCode"); models.Text = HardwareScanner.SuggestedModelFolder();
+        if (target is not null) location.Text = Path.GetFullPath(target);
+        if (upgrading)
+        {
+            if (!File.Exists(Path.Combine(location.Text, "installation.json"))) throw new IOException("La carpeta elegida no contiene una instalación de SheepCode.");
+            models.Text = InstallationPaths.Resolve(location.Text, InstallationPaths.Load(location.Text).Models);
+            dictation.Checked = desktop.Checked = menu.Checked = false;
+            install.Text = "🌷 Actualizar mi taller"; step.Text = "01 · Nueva versión, el mismo taller";
+        }
         layout.Controls.Add(FolderRow("📂 Taller", location), 0, 3); layout.Controls.Add(FolderRow("🧠 Modelos", models), 0, 4);
         var hardwareBox = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Padding = new(12, 6, 12, 8) };
         var hardwareTitle = new TableLayoutPanel { Dock = DockStyle.Top, Height = 48, ColumnCount = 2 }; hardwareTitle.ColumnStyles.Add(new(SizeType.Percent, 100)); hardwareTitle.ColumnStyles.Add(new(SizeType.Absolute, 200));
@@ -68,6 +78,11 @@ internal sealed class SetupForm : Form
         try
         {
             system = hardwareFixture ?? HardwareScanner.Scan(models.Text); hardware.Text = system.Describe(); hardware.Select(0, 0); hardware.ScrollToCaret();
+            if (upgrading)
+            {
+                recommended = ModelCatalog.EditorOnly(); choice.Items.Clear(); choice.Items.Add(recommended); choice.SelectedIndex = 0; choice.Enabled = false;
+                description.Text = "Actualizar app y código editable. El setup respalda la versión anterior y conserva modelos, dictado, conexiones, proyectos, ajustes y voz neuronal. No descarga un modelo nuevo."; install.Enabled = true; return;
+            }
             recommended = ModelCatalog.Recommend(system, ModelCatalog.FindExisting()); choice.Items.Clear(); choice.Items.Add(recommended);
             if (recommended.Kind == "reuse" && ModelCatalog.StrataHardware(system) && system.DiskFreeBytes >= 100L * 1073741824) choice.Items.Add(ModelCatalog.Strata());
             foreach (var model in ModelCatalog.Models.Where(m => m.Size < (recommended.Model?.Size ?? long.MaxValue) && m.Size + 3L * 1073741824 < system.DiskFreeBytes && m.Size * 1.25 + 700_000_000 < ModelCatalog.MemoryBudget(system)).Reverse())
@@ -98,7 +113,7 @@ internal sealed class SetupForm : Form
         catch (Exception e) { step.Text = "Hay algo que resolver"; log.AppendText(e.Message + "\nConsulta la guía incluida y vuelve a intentar.\n"); }
         finally
         {
-            busy = false; cancellation.Dispose(); cancellation = null; cancel.Enabled = true; if (!completed) { install.Enabled = rescan.Enabled = true; choice.Enabled = desktop.Enabled = menu.Enabled = dictation.Enabled = true; cancel.Text = "Cerrar"; location.ReadOnly = models.ReadOnly = false; }
+            busy = false; cancellation.Dispose(); cancellation = null; cancel.Enabled = true; if (!completed) { install.Enabled = rescan.Enabled = true; desktop.Enabled = menu.Enabled = dictation.Enabled = true; choice.Enabled = !upgrading; cancel.Text = "Cerrar"; location.ReadOnly = models.ReadOnly = false; }
             progress.Style = ProgressBarStyle.Continuous;
         }
     }

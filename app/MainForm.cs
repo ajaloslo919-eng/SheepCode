@@ -201,12 +201,13 @@ internal sealed partial class MainForm : Form
         {
             if (_checking) { _verificationCancellation?.Cancel(); e.Cancel = true; return; }
             if (_closing) return;
-            if (!CanLeaveFile()) { e.Cancel = true; return; }
+            if (!CanLeaveFile()) { e.Cancel = true; _updateInstallRequested = false; return; }
+            if (_updateInstallRequested) { try { _agent.Updates.StartHandoff(); } catch (Exception error) { _updateInstallRequested = false; AppendChat("error", error.Message); e.Cancel = true; return; } }
             e.Cancel = true; _closing = true; Enabled = false;
-            _taskCancellation?.Cancel(); _voice.Interrupt(); _dictation.Dispose();
+            _taskCancellation?.Cancel(); _backgroundCancellation.Cancel(); _agent.Connections.Cancel(); _modelTimer.Stop(); _voice.Interrupt(); _dictation.Dispose();
             await _engine.StopAsync(CancellationToken.None);
             if (_running is not null) try { await _running; } catch (Exception) { }
-            await _engine.DisposeAsync(); await _voice.DisposeAsync(); _browserTools.Dispose(); _highlight.Dispose(); _modelTimer.Dispose(); Close();
+            await _engine.DisposeAsync(); await _voice.DisposeAsync(); _agent.Connections.Dispose(); _agent.Updates.Dispose(); _browserTools.Dispose(); _highlight.Dispose(); _modelTimer.Dispose(); Close();
         };
     }
     private void RefreshSettings()
@@ -277,6 +278,14 @@ internal sealed partial class MainForm : Form
     }
     internal void OpenFile(string path)
     {
+        if (Path.GetExtension(path).ToLowerInvariant() is ".docx" or ".xlsx" or ".pptx" or ".pdf")
+        {
+            _loadingEditor = true;
+            try { _openedFile = null; _agent.ActiveFile = path; _editor.ReadOnly = true; _editor.Text = ArtifactTools.Read(_agent.Workspace!, path); _dirty = false; _fileLabel.Text = path + " · vista de contenido"; _tabs.SelectedIndex = 0; }
+            finally { _loadingEditor = false; }
+            return;
+        }
+        _editor.ReadOnly = false;
         _openedFile = _agent.Workspace!.Read(path); _agent.ActiveFile = _openedFile.Path; _loadingEditor = true; _editor.Text = _openedFile.Text;
         _loadingEditor = false; _dirty = false; _fileLabel.Text = path; HighlightCode(); _tabs.SelectedIndex = 0;
     }
@@ -374,6 +383,7 @@ internal sealed partial class MainForm : Form
         {
             var cancellation = _taskCancellation;
             var cancelling = cancellation?.CancelAsync();
+            _agent.Connections.Cancel();
             _voice.Interrupt();
             await _engine.StopAsync(CancellationToken.None);
             if (cancelling is not null) await cancelling;

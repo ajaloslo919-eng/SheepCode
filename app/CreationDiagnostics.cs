@@ -32,6 +32,13 @@ internal static class CreationDiagnostics
                 var result = await new ChecksRunner(agent.Workspace!).RunAsync("python-test", true, null, timeout.Token);
                 if (result.ExitCode != 0) throw new IOException("El programa no pasó las entradas 0, 2 y 5 amigos: " + result.Output);
                 report["pythonCheck"] = result;
+                var artifactReply = await agent.SubmitAsync("Usa $spreadsheets. Prepara gastos.xlsx, que no existe, con artifact_propose. format es xlsx, skill es spreadsheets y content es una cadena JSON con sheet Gastos y rows [[\"Concepto\",\"Importe\"],[\"Luz\",30]]. Prepara la propuesta y termina; no la apliques.", timeout.Token);
+                var artifact = agent.Changes.Items.Single(c => c.Path == "gastos.xlsx" && c.Status == "pending"); var artifactActions = agent.LastActions.ToArray();
+                if (artifact.ArtifactFormat != "xlsx" || !artifactActions.Contains("artifact_propose") || File.Exists(Path.Combine(project, "gastos.xlsx"))) throw new IOException("El agente no preparó el XLSX como propuesta revisable.");
+                await agent.SubmitAsync("Aplica el cambio " + artifact.Id, timeout.Token);
+                var artifactRead = await agent.SubmitAsync("Lee el documento gastos.xlsx", timeout.Token);
+                if (!artifactRead.Contains("Luz") || !artifactRead.Contains("B2=30")) throw new IOException("El XLSX del agente no conserva los datos solicitados.");
+                report["artifactCheck"] = new { path = Path.Combine(project, "gastos.xlsx"), artifactActions, reply = artifactReply, read = artifactRead, appliedBy = "Petición humana del arnés de pruebas, en proyecto propio" };
             }
             report["status"] = "complete"; report["project"] = project; report["reply"] = reply; report["actions"] = actions; report["proposal"] = proposal; report["engine"] = engine.Snapshot(); report["completed"] = DateTimeOffset.UtcNow; Save(); return 0;
         }

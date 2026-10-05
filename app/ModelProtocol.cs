@@ -6,6 +6,8 @@ internal static class ModelProtocol
 {
     private static readonly IReadOnlyDictionary<string, string[]> Fields = new Dictionary<string, string[]>
     {
+        ["list_skills"] = [], ["artifact_read"] = ["path"], ["artifact_propose"] = ["path", "format", "content", "skill"], ["git_read"] = ["operation"], ["project_backup"] = [], ["web_search"] = ["query"],
+        ["mcp_status"] = [], ["mcp_tools"] = ["server"], ["mcp_call"] = ["server", "tool", "arguments", "skill"], ["automation_status"] = [], ["updater_status"] = [], ["check_updates"] = [],
         ["list_files"] = [], ["read_file"] = ["path"], ["search_files"] = ["query"], ["edit_file"] = ["path", "find", "replace"],
         ["write_file"] = ["path", "content"], ["run_check"] = ["check"], ["finish"] = ["message"], ["use_skill"] = ["name"],
         ["pc_windows"] = [], ["pc_read"] = [], ["pc_click"] = ["node"], ["pc_type"] = ["node", "text"],

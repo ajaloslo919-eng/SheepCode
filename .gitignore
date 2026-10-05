@@ -2,6 +2,7 @@
 **/obj/
 **/build/
 **/downloads/
+**/tool-probe/
 **/__pycache__/
 **/*.pyc
 **/*.pdb
@@ -20,6 +21,8 @@ packaging/bootstrap.rc
 /models/
 /logs/
 /checks/
+/verified-installation.json
+/pre-install-preservation.json
 /backups/
 .vs/
 .idea/

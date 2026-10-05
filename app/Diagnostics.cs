@@ -20,7 +20,7 @@ internal static class Diagnostics
         var agent = new AgentController(engine, voice, prefs);
         try
         {
-            var root = Path.Combine(AppPaths.Temp, "self-test-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(root);
+            var root = Path.Combine(AppPaths.Root, "checks", "self-test-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(root);
             var before = "def add(a, b):\r\n    return a - b\r\n";
             File.WriteAllText(Path.Combine(root, "calculator.py"), before, new UTF8Encoding(true));
             File.WriteAllText(Path.Combine(root, "test_calculator.py"), "import unittest\nfrom calculator import add\nclass SumTest(unittest.TestCase):\n    def test_sum(self):\n        self.assertEqual(add(8, 3), 11)\n");

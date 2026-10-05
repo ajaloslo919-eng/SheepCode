@@ -9,7 +9,11 @@ SheepCode es una aplicación experimental para **Windows 10/11 x64**. Abre una c
 ## ✨ Tu taller
 
 - Editor, explorador, chat y propuestas de cambios con aplicar, rechazar y deshacer.
-- Skills de código, navegador integrado, control de ventanas mediante Windows UI Automation y modelos. Puedes añadir tus propios `SKILL.md` de instrucciones.
+- 55 skills con buscador: código, PC, navegador, documentos, hojas, PDF, presentaciones, Git, respaldos y flujos de desarrollo. Importa y crea tus propios `SKILL.md`.
+- Herramientas locales para proponer DOCX/XLSX/PPTX/PDF básicos y CSV/HTML/SVG editables, con Aplicar y Deshacer.
+- Conexiones MCP HTTP/stdio para imágenes, servicios externos, despliegues o Excel en vivo; muestran **sin configurar** hasta conectar un proveedor y autorizar sus herramientas.
+- Actualizador integrado en **Skills → Actualizar**: busca releases, descarga y verifica SHA-256 antes de abrir el setup en tu carpeta actual.
+- Automatizaciones locales de lectura y propuestas con SheepCode abierto y el motor listo.
 - Pestañas HTTP/HTTPS: abrir, leer por fragmentos, rellenar controles permitidos y navegar.
 - Setup decorado que analiza RAM, CPU, disco, batería y gráficas; propone un modelo local según la capacidad del equipo.
 - Portátiles Intel/AMD, iGPU y equipos híbridos: inventario DXGI + Windows/PnP, validación Vulkan y modo de ahorro.
@@ -47,6 +51,8 @@ No hay versiones nativas para ARM64, macOS o Linux. El soporte de portátil se h
 ## 🐾 Skills y permisos
 
 Activa las skills desde su panel o con «Activa la skill browser». Para controlar el PC, selecciona una ventana. Las pestañas pertenecen al navegador integrado de SheepCode. Las skills personalizadas agregan instrucciones, sin ampliar permisos ni ejecutar scripts.
+
+Las skills adaptan áreas de trabajo habituales de un agente de código. Los flujos de instrucciones, herramientas locales y proveedores externos tienen estados distintos en el catálogo. Los servicios propietarios de Codex, cuentas externas, OCR avanzado y generación de imágenes necesitan un proveedor MCP compatible; no se incluyen accesos o credenciales. [Configuración y ejemplos](GUIA.md).
 
 El contenido de archivos y webs se trata como datos. El agente propone cambios; guardarlos exige una acción humana. Ejecutar comprobaciones del proyecto requiere habilitarlas. No se permiten comandos de terminal arbitrarios ni acceder a campos de contraseña. **Parar** cancela la petición y termina el proceso propio de IA; conserva las propuestas anteriores y la siguiente tarea vuelve a cargar el motor.
 
