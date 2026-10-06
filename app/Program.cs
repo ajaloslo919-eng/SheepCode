@@ -26,6 +26,7 @@ internal static class Program
         if (args.Contains("--workflow-check")) { ApplicationConfiguration.Initialize(); return WorkflowDiagnostics.Run(); }
         if (args.Contains("--laptop-check")) return PortableDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--cpu-check")) return CpuDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Contains("--speed-workflow-check")) return FastCpuDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--creation-check")) return CreationDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--preflight-agent-check")) return CreationDiagnostics.RunAsync(true).GetAwaiter().GetResult();
         if (args.Contains("--agent-check")) return Diagnostics.AgentCheckAsync().GetAwaiter().GetResult();

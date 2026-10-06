@@ -12,8 +12,29 @@ internal static class ModelProtocol
         ["write_file"] = ["path", "content"], ["run_check"] = ["check"], ["finish"] = ["message"], ["use_skill"] = ["name"],
         ["pc_windows"] = [], ["pc_read"] = [], ["pc_click"] = ["node"], ["pc_type"] = ["node", "text"],
         ["browser_tabs"] = [], ["browser_open"] = ["url"], ["browser_read"] = ["tab"], ["browser_click"] = ["tab", "node"],
-        ["browser_fill"] = ["tab", "node", "text"], ["browser_back"] = ["tab"], ["browser_close"] = ["tab"], ["model_status"] = [], ["system_info"] = [], ["portable_status"] = []
+        ["browser_fill"] = ["tab", "node", "text"], ["browser_back"] = ["tab"], ["browser_close"] = ["tab"], ["model_status"] = [], ["system_info"] = [], ["portable_status"] = [], ["performance_status"] = []
     };
+    internal static readonly string CpuActionGrammar = BuildCpuActionGrammar();
+    private static string BuildCpuActionGrammar()
+    {
+        var rules = new List<string> { "root ::= " + string.Join(" | ", Fields.Keys.Select(name => "action-" + name.Replace('_', '-'))),
+            "string ::= \"\\\"\" ([^\"\\\\\\x7F\\x00-\\x1F] | \"\\\\\" ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4}))* \"\\\"\" ws",
+            "integer ::= [0-9]+ ws", "ws ::= | \" \" | \"\\n\" [ \\t]{0,20}" };
+        string Literal(string value) => JsonSerializer.Serialize(value) + " ws";
+        string Field(string name, string type = "string") => Literal("\"" + name + "\"") + " \":\" ws " + type;
+        foreach (var (name, required) in Fields)
+        {
+            var fields = new List<string> { Literal("\"action\"") + " \":\" ws " + Literal("\"" + name + "\"") };
+            fields.AddRange(required.Where(s => s != "message").Select(s => Field(s)));
+            var optionalNumbers = name switch {
+                "read_file" => new[] { "start_line", "line_count" }, "list_skills" => new[] { "start", "count" },
+                "browser_read" => new[] { "start", "text_length", "nodes_start", "node_count" }, _ => Array.Empty<string>() };
+            var optional = string.Concat(optionalNumbers.Select(s => " (\",\" ws " + Field(s, "integer") + ")?"));
+            if (name == "search_files") optional += " (\",\" ws " + Field("path") + ")?";
+            rules.Add("action-" + name.Replace('_', '-') + " ::= \"{\" ws " + string.Join(" \",\" ws ", fields) + optional + " \",\" ws " + Field("message") + " \"}\" ws");
+        }
+        return string.Join('\n', rules) + "\n";
+    }
     internal static string? ValidateAction(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("action", out var action) || action.ValueKind != JsonValueKind.String)

@@ -9,6 +9,31 @@ namespace SheepCode.Distribution;
 
 internal static class ModelProvisioner
 {
+    private static async Task<string> InstallCpuRuntimeAsync(string root, IProgress<InstallProgress>? progress, CancellationToken token)
+    {
+        using var metadata = JsonDocument.Parse(typeof(ModelProvisioner).Assembly.GetManifestResourceStream("SheepCode.strata-cpu.json") ?? throw new IOException("Falta el catálogo del motor Strata CPU."));
+        var package = SafeFiles.Child(root, @"runtime\packages\strata-cpu.zip");
+        if (!(await SafeFiles.HashAsync(package, token)).Equals(metadata.RootElement.GetProperty("sha256").GetString(), StringComparison.OrdinalIgnoreCase))
+            throw new IOException("El paquete de Strata CPU no coincide con SHA-256.");
+        var executable = SafeFiles.Child(root, @"runtime\strata-cpu\strata-cpu.exe");
+        var expected = metadata.RootElement.GetProperty("executableSha256").GetString();
+        if (File.Exists(executable) && (await SafeFiles.HashAsync(executable, token)).Equals(expected, StringComparison.OrdinalIgnoreCase)) return executable;
+        progress?.Report(new("Preparando Strata CPU", "Motor nativo SSE2 optimizado · conservando modelo y ajustes"));
+        var stage = SafeFiles.Child(root, @"temp\cpu-runtime-" + Guid.NewGuid().ToString("N"));
+        SafeFiles.ExtractZip(package, stage, token);
+        var replacement = SafeFiles.Child(stage, "strata-cpu.exe");
+        if (!(await SafeFiles.HashAsync(replacement, token)).Equals(expected, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("El ejecutable de Strata CPU no coincide con SHA-256.");
+        if (File.Exists(executable))
+        {
+            var backup = SafeFiles.Child(root, @"backups\before-cpu-runtime-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(backup); File.Copy(executable, Path.Combine(backup, "strata-cpu.exe"));
+            DistributionJson.Save(Path.Combine(backup, "manifest.json"), new { path = "runtime/strata-cpu/strata-cpu.exe", sha256 = await SafeFiles.HashAsync(executable, token) });
+        }
+        token.ThrowIfCancellationRequested(); Directory.CreateDirectory(Path.GetDirectoryName(executable)!);
+        SafeFiles.Child(root, @"runtime\strata-cpu\strata-cpu.exe"); File.Move(replacement, executable, true);
+        return executable;
+    }
     internal static int AvailablePort()
     {
         for (var port = 8088; port < 8108; port++)
@@ -43,7 +68,18 @@ internal static class ModelProvisioner
         root = Path.GetFullPath(root); modelFolder = Path.GetFullPath(modelFolder);
         var oldPaths = InstallationPaths.Load(root); var paths = new InstallationPaths { Models = modelFolder, VoicePython = oldPaths.VoicePython, ToolsPython = oldPaths.ToolsPython };
         var current = RuntimeProfile.Load(root); RuntimeProfile profile;
-        if (plan.Kind == "none") return current;
+        if (plan.Kind == "none")
+        {
+            // Update the standard selected CPU runtime without changing any
+            // profile, model, preference or voice path. Custom runtimes stay custom.
+            if (current.Kind == "strata-cpu")
+            {
+                var standard = SafeFiles.Child(root, @"runtime\strata-cpu\strata-cpu.exe");
+                if (InstallationPaths.Resolve(root, current.Executable).Equals(standard, StringComparison.OrdinalIgnoreCase)) await InstallCpuRuntimeAsync(root, progress, token);
+                else progress?.Report(new("Conservando motor personalizado", "El binario CPU usa otra ruta; no se sobrescribe automáticamente."));
+            }
+            return current;
+        }
         var packages = SafeFiles.Child(root, @"runtime\packages");
         if (plan.Kind == "reuse")
         {
@@ -74,20 +110,7 @@ internal static class ModelProvisioner
             if (model.Id != "qwen3-0.6b") throw new InvalidOperationException("Modelo fuera del perfil Strata de 4 GB.");
             var modelPath = SafeFiles.Child(modelFolder, Path.Combine(model.Id, model.File));
             using var downloader = new VerifiedDownloader(); await downloader.DownloadAsync(model.Url, modelPath, model.Size, model.Sha256, progress, token);
-            using var metadata = JsonDocument.Parse(typeof(ModelProvisioner).Assembly.GetManifestResourceStream("SheepCode.strata-cpu.json") ?? throw new IOException("Falta el catálogo del motor Strata CPU."));
-            var package = Path.Combine(packages, "strata-cpu.zip");
-            using (var zip = File.OpenRead(package))
-            {
-                var hash = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(zip, token));
-                if (!hash.Equals(metadata.RootElement.GetProperty("sha256").GetString(), StringComparison.OrdinalIgnoreCase)) throw new IOException("El paquete de Strata CPU no coincide con SHA-256.");
-            }
-            var runtime = SafeFiles.Child(root, @"runtime\strata-cpu");
-            progress?.Report(new("Preparando Strata CPU", "Motor nativo x64/SSE2 · sin Python · memoria limitada"));
-            SafeFiles.ExtractZip(package, runtime, token);
-            var executable = Path.Combine(runtime, "strata-cpu.exe");
-            using (var binary = File.OpenRead(executable))
-                if (!Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(binary, token)).Equals(metadata.RootElement.GetProperty("executableSha256").GetString(), StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("El ejecutable de Strata CPU no coincide con SHA-256.");
+            var executable = await InstallCpuRuntimeAsync(root, progress, token);
             profile = new() { Kind = "strata-cpu", ModelId = model.Id, Label = plan.Label, Executable = Path.GetRelativePath(root, executable), ModelFile = modelPath,
                 DeviceDescription = "CPU x64/SSE2 · compatible sin AVX · presupuesto 1536 MiB", Context = 4096, Threads = Math.Clamp(hardware.Threads, 1, 2),
                 MemoryMiB = 1536, Port = current.Configured ? current.Port : AvailablePort() };

@@ -20,6 +20,7 @@ internal sealed partial class MainForm : Form
     private readonly ListBox _changeList = new();
     private readonly ComboBox _checkList = new(), _reasoning = new(), _emotion = new();
     private readonly CheckBox _allowChecks = new() { Text = "Comprobaciones", AutoSize = true }, _readAloud = new() { Text = "Leer respuestas", AutoSize = true };
+    private readonly CheckBox _fastCpu = new() { Text = "⚡ Qwen rápido", AutoSize = true };
     private readonly Button _send = ButtonFor("🐑 Enviar", true), _stop = ButtonFor("⏸ Parar"), _mic = ButtonFor("🎙 Dictar"),
         _open = ButtonFor("📂 Proyecto"), _connect = ButtonFor("✨ Iniciar IA"), _save = ButtonFor("💾 Guardar"),
         _apply = ButtonFor("✓ Aplicar", true), _reject = ButtonFor("Rechazar"), _undo = ButtonFor("↶ Deshacer"), _runCheck = ButtonFor("▶ Ejecutar");
@@ -129,13 +130,14 @@ internal sealed partial class MainForm : Form
         foreach (var emotion in _voice.Emotions) _emotion.Items.Add(emotion);
         foreach (var combo in new[] { _reasoning, _emotion, _checkList })
         { combo.BackColor = Background; combo.ForeColor = Foreground; combo.FlatStyle = FlatStyle.Flat; StyleCombo(combo); }
-        options.Controls.AddRange([_allowChecks, _readAloud, _reasoning, _emotion]); conversation.Controls.Add(options, 0, 2);
+        options.Controls.AddRange([_allowChecks, _readAloud, _reasoning, _fastCpu, _emotion]); conversation.Controls.Add(options, 0, 2);
         _input.Dock = DockStyle.Fill; _input.BackColor = Background; _input.ForeColor = Foreground; _input.BorderStyle = BorderStyle.FixedSingle;
         _input.Font = new("Segoe UI", 11); _input.PlaceholderText = "¿Qué creamos hoy? 🌸 Usa $browser, $desktop…\r\nCtrl + Enter para enviar"; conversation.Controls.Add(_input, 0, 3);
         var composerButtons = Flow(_send, _mic, _stop); conversation.Controls.Add(composerButtons, 0, 4); columns.Controls.Add(conversation, 2, 0);
         root.Controls.Add(_status, 0, 3);
         var tip = new ToolTip(); tip.SetToolTip(_allowChecks, "Permite al agente ejecutar las comprobaciones detectadas. Estas ejecutan código del proyecto abierto.");
         tip.SetToolTip(_readAloud, "Lee el resumen de la respuesta con la voz neuronal de Ono_Anna en la RX 580.");
+        tip.SetToolTip(_fastCpu, "Qwen3-0.6B: instrucciones breves, skills a demanda y prelectura del archivo abierto. Mantiene permisos y propuestas para revisar. También: Activa/Desactiva el modo rápido.");
         tip.SetToolTip(_mic, "Pulsa para grabar y vuelve a pulsar para transcribir. Puedes revisar el texto antes de enviarlo.");
         tip.SetToolTip(_connect, "Carga el modelo local elegido por el setup. El perfil original conserva Strata, sus dos GPU y la voz RX 580.");
     }
@@ -185,6 +187,7 @@ internal sealed partial class MainForm : Form
             });
         };
         _allowChecks.CheckedChanged += (_, _) => SaveSettings(); _readAloud.CheckedChanged += (_, _) => SaveSettings();
+        _fastCpu.CheckedChanged += (_, _) => SaveSettings();
         _reasoning.SelectedIndexChanged += (_, _) => SaveSettings(); _emotion.SelectedIndexChanged += (_, _) => SaveSettings();
         _agent.ProjectChanged += () => Ui(RefreshProject);
         _agent.ChangeProposed += change => Ui(() => { RefreshChanges(change.Id); if (change.Status == "pending") _tabs.SelectedIndex = 1; });
@@ -216,6 +219,8 @@ internal sealed partial class MainForm : Form
         _allowChecks.Checked = _preferences.AllowChecks; _readAloud.Checked = _preferences.ReadAloud;
         _readAloud.Enabled = File.Exists(Path.Combine(AppPaths.State, "tts-config.json")) && File.Exists(AppPaths.VoicePython);
         _reasoning.Enabled = _engine.Profile.Kind != "strata-cpu";
+        _reasoning.Visible = _reasoning.Enabled; _fastCpu.Visible = !_reasoning.Enabled;
+        _fastCpu.Enabled = _agent.Skills.Enabled("models"); _fastCpu.Checked = _preferences.FastCpuMode;
         _reasoning.SelectedIndex = _reasoning.Enabled ? Array.IndexOf(new[] { "none", "low", "medium", "high" }, _preferences.Reasoning) : 0;
         _emotion.SelectedItem = _preferences.Emotion; if (_emotion.SelectedIndex < 0) _emotion.SelectedItem = "neutral";
         _powerMode.SelectedIndex = Array.IndexOf(new[] { "auto", "eco", "performance" }, _preferences.PortableMode);
@@ -226,6 +231,7 @@ internal sealed partial class MainForm : Form
         if (_refreshingSettings) return;
         _preferences.AllowChecks = _allowChecks.Checked; _preferences.ReadAloud = _readAloud.Checked;
         if (_reasoning.Enabled) _preferences.Reasoning = new[] { "none", "low", "medium", "high" }[Math.Max(0, _reasoning.SelectedIndex)];
+        if (_fastCpu.Visible && _fastCpu.Enabled) _preferences.FastCpuMode = _fastCpu.Checked;
         _preferences.Emotion = _emotion.SelectedItem as string ?? "neutral"; _preferences.Save();
         if (!_preferences.ReadAloud) _voice.Interrupt();
     }

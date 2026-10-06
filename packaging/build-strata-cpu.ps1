@@ -26,7 +26,7 @@ if($LASTEXITCODE -ne 0){Select-String -LiteralPath $taskLog -Pattern 'error C|er
 $taskPackage=Join-Path $taskRoot 'packaging\downloads\strata-cpu.zip'
 if(Test-Path -LiteralPath $taskPackage){Remove-Item -LiteralPath $taskPackage}
 Compress-Archive -LiteralPath (Join-Path $taskBuild 'strata-cpu.exe') -DestinationPath $taskPackage
-$taskMetadata=[pscustomobject]@{version='0.1.0';dependency='3cf03257f219afbe7334045ff7c6a06ac68c627d';isa='x64/SSE2';size=(Get-Item -LiteralPath $taskPackage).Length;sha256=(Get-FileHash -LiteralPath $taskPackage -Algorithm SHA256).Hash;executableSha256=(Get-FileHash -LiteralPath (Join-Path $taskBuild 'strata-cpu.exe')).Hash}
+$taskMetadata=[pscustomobject]@{version='0.1.1';dependency='3cf03257f219afbe7334045ff7c6a06ac68c627d';isa='x64/SSE2';size=(Get-Item -LiteralPath $taskPackage).Length;sha256=(Get-FileHash -LiteralPath $taskPackage -Algorithm SHA256).Hash;executableSha256=(Get-FileHash -LiteralPath (Join-Path $taskBuild 'strata-cpu.exe')).Hash}
 $taskMetadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'strata-cpu.json') -Encoding utf8
 $taskMetadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRoot 'shared\strata-cpu.json') -Encoding utf8
 $taskMetadata | ConvertTo-Json

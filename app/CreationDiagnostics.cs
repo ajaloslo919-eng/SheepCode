@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace SheepCode;
 
 internal static class CreationDiagnostics
@@ -9,6 +11,7 @@ internal static class CreationDiagnostics
         void Save() => AppPaths.SaveJson(reportPath, report);
         Save(); var saved = Preferences.Load(); var original = File.Exists(Preferences.PathName) ? File.ReadAllBytes(Preferences.PathName) : null;
         await using var voice = new NeuralVoice(); await using var engine = new EngineHost(voice); var agent = new AgentController(engine, voice, saved);
+        var watch = Stopwatch.StartNew();
         try
         {
             saved.ReadAloud = false;
@@ -40,9 +43,11 @@ internal static class CreationDiagnostics
                 if (!artifactRead.Contains("Luz") || !artifactRead.Contains("B2=30")) throw new IOException("El XLSX del agente no conserva los datos solicitados.");
                 report["artifactCheck"] = new { path = Path.Combine(project, "gastos.xlsx"), artifactActions, reply = artifactReply, read = artifactRead, appliedBy = "Petición humana del arnés de pruebas, en proyecto propio" };
             }
-            report["status"] = "complete"; report["project"] = project; report["reply"] = reply; report["actions"] = actions; report["proposal"] = proposal; report["engine"] = engine.Snapshot(); report["completed"] = DateTimeOffset.UtcNow; Save(); return 0;
+            report["status"] = "complete"; report["project"] = project; report["reply"] = reply; report["actions"] = actions; report["proposal"] = proposal; report["engine"] = engine.Snapshot();
+            report["elapsedSeconds"] = watch.Elapsed.TotalSeconds; report["generations"] = engine.Generations; report["performance"] = agent.PerformanceStatus();
+            report["completed"] = DateTimeOffset.UtcNow; Save(); return 0;
         }
-        catch (Exception e) { report["status"] = "failed"; report["error"] = e.ToString(); Save(); return 1; }
+        catch (Exception e) { report["status"] = "failed"; report["error"] = e.ToString(); report["elapsedSeconds"] = watch.Elapsed.TotalSeconds; report["generations"] = engine.Generations; report["changes"] = agent.Changes?.Items; Save(); return 1; }
         finally { if (original is not null) File.WriteAllBytes(Preferences.PathName, original); }
     }
 }

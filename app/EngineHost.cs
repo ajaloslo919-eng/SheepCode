@@ -18,6 +18,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
     internal string State { get; private set; } = "Sin iniciar";
     internal string Model { get; private set; } = RuntimeProfile.Load(AppPaths.Root).ModelId;
     internal object? LastGeneration { get; private set; }
+    internal List<object> Generations { get; } = [];
     internal LaunchPolicy? ActiveLaunch { get; private set; }
     internal int EffectiveContext => Math.Min(_reportedContext ?? int.MaxValue, ActiveLaunch?.Context ?? LaunchPolicy.For(Profile, Preferences.Load().PortableMode, PowerScanner.Read()).Context);
     internal bool Ready => _server is { HasExited: false } && State == "Preparado";
@@ -171,12 +172,13 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             var available = EffectiveContext - mandatory - budget - 96 - 512;
             if (available < 256) throw new InvalidOperationException("La petición y las instrucciones no dejan espacio para una acción. Acorta la petición o la skill.");
             var limit = Math.Min(ModelProtocol.OutputBudget(attempt, EffectiveContext), available);
-            if (Profile.Kind == "strata-cpu") limit = Math.Min(limit, 1536);
+            if (Profile.Kind == "strata-cpu") limit = Math.Min(limit, Preferences.Load().FastCpuMode ? new[] { 512, 1024, 1536 }[attempt] : 1536);
             var packed = await PromptContext.FitAsync(messages, EffectiveContext, limit + budget,
                 (items, ct) => CountPromptAsync(items, reasoning, ct, estimateScale), token);
             var body = new { model = Model, messages = packed.Select(m => new { role = m.Role, content = m.Content }),
                 max_tokens = limit + budget, temperature = 0.15, stream = false, reasoning_effort = reasoning,
-                reasoning_budget_tokens = budget, chat_template_kwargs = new { enable_thinking = reasoning != "none" }, response_format = new { type = "json_object" } };
+                reasoning_budget_tokens = budget, chat_template_kwargs = new { enable_thinking = reasoning != "none" },
+                response_format = Profile.Kind == "strata-cpu" ? (object)new { type = "json_object", grammar = ModelProtocol.CpuActionGrammar } : new { type = "json_object" } };
             var clock = Stopwatch.StartNew();
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(Endpoint, "v1/chat/completions"))
                 { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
@@ -200,9 +202,10 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             var text = choice.GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "";
             var finish = choice.GetProperty("finish_reason").GetString();
             LastGeneration = new { seconds = clock.Elapsed.TotalSeconds, model = Model, finishReason = finish, reasoning,
-                contextTokens = EffectiveContext, promptCompacted = !packed.SequenceEqual(messages),
+                contextTokens = EffectiveContext, outputBudget = limit, promptCompacted = !packed.SequenceEqual(messages),
                 usage = data.RootElement.GetProperty("usage").Clone(), backend = data.RootElement.TryGetProperty("strata", out var stats) ? (JsonElement?)stats.Clone() : null,
                 scope = "Generación del componente " + Profile.Kind + " activo e integrado en SheepCode; excluye herramientas, voz y reproducción." };
+            Generations.Add(LastGeneration); if (Generations.Count > 32) Generations.RemoveAt(0);
             if (finish != "length" && text.Length > 0) return text;
         }
         throw new InvalidOperationException("El motor no terminó una acción JSON tras tres intentos. Pide un archivo pequeño o una sustitución concreta; no se ejecutó la acción incompleta.");
@@ -221,6 +224,11 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
         }
         try
         {
+            if (Profile.Kind == "strata-cpu")
+            {
+                using var counted = await Query("prompt-count", new { messages = messages.Select(m => new { role = m.Role, content = m.Content }) });
+                if (counted is not null && counted.RootElement.TryGetProperty("count", out var count) && count.TryGetInt32(out var exact) && exact >= 0) return exact + 32;
+            }
             using var template = await Query("apply-template", new { messages = messages.Select(m => new { role = m.Role, content = m.Content }),
                 chat_template_kwargs = new { enable_thinking = reasoning != "none" } });
             if (template is not null && template.RootElement.TryGetProperty("prompt", out var prompt) && prompt.ValueKind == JsonValueKind.String)

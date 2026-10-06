@@ -26,10 +26,29 @@ internal static class CpuDiagnostics
             using var health = JsonDocument.Parse(await http.GetStringAsync(new Uri(EngineHost.Endpoint, "health"), timeout.Token));
             var data = health.RootElement;
             if (data.GetProperty("backend").GetString() != "dense-cpu" || data.GetProperty("compiled_avx").GetInt32() != 0 || data.GetProperty("compiled_avx2").GetInt32() != 0 ||
-                data.GetProperty("max_context").GetInt32() != 4096 || data.GetProperty("threads").GetInt32() > 2) throw new IOException("El motor activo no verificó CPU sin AVX y el presupuesto previsto.");
+                data.GetProperty("max_context").GetInt32() != 4096 || data.GetProperty("threads").GetInt32() > 2 ||
+                data.GetProperty("q8_kernel").GetString() != "SSE2" || !data.GetProperty("q8_kernel_verified").GetBoolean()) throw new IOException("El motor activo no verificó CPU sin AVX, cálculo Q8 SSE2 y el presupuesto previsto.");
             using var status = JsonDocument.Parse(await agent.SubmitAsync("Estado del modelo", timeout.Token));
             if (status.RootElement.GetProperty("engine").GetProperty("lowMemoryCpu").GetProperty("memoryLimitMiB").GetInt32() != 1536) throw new IOException("La entrada compartida texto/dictado no informó del presupuesto.");
             report["health"] = data.Clone(); report["modelStatus"] = status.RootElement.Clone();
+            var shortMessages = new List<object> { new { role = "user", content = "Responde solo con un objeto JSON que diga hola." } };
+            using var counted = await http.PostAsync(new Uri(EngineHost.Endpoint, "prompt-count"), new StringContent(JsonSerializer.Serialize(new { messages = shortMessages }), Encoding.UTF8, "application/json"), timeout.Token);
+            using var countData = JsonDocument.Parse(await counted.Content.ReadAsStringAsync(timeout.Token));
+            async Task<JsonDocument> Generate() {
+                using var request = new StringContent(JsonSerializer.Serialize(new { messages = shortMessages, max_tokens = 48, temperature = 0.15, response_format = new { type = "json_object" } }), Encoding.UTF8, "application/json");
+                using var response = await http.PostAsync(new Uri(EngineHost.Endpoint, "v1/chat/completions"), request, timeout.Token);
+                response.EnsureSuccessStatusCode(); return JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+            }
+            using var first = await Generate(); var firstData = first.RootElement;
+            var firstPrompt = firstData.GetProperty("usage").GetProperty("prompt_tokens").GetInt32();
+            if (firstPrompt != countData.RootElement.GetProperty("count").GetInt32()) throw new IOException("El conteo nativo no coincide con la inferencia real.");
+            var assistant = firstData.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            if (firstData.GetProperty("choices")[0].GetProperty("finish_reason").GetString() == "length") throw new IOException("La acción de caché quedó incompleta.");
+            shortMessages.Add(new { role = "assistant", content = assistant }); shortMessages.Add(new { role = "user", content = "Ahora responde un objeto JSON que diga adiós." });
+            using var second = await Generate(); var secondData = second.RootElement;
+            var prefix = secondData.GetProperty("strata").GetProperty("cached_prompt_tokens").GetInt32();
+            if (prefix < firstPrompt + firstData.GetProperty("usage").GetProperty("completion_tokens").GetInt32() - 1) throw new IOException("El siguiente paso descartó los tokens del asistente ya procesados.");
+            report["prefixReuse"] = new { first = firstData.Clone(), second = secondData.Clone(), exactCount = true, includesPreviousAssistant = true, scope = "Componente activo instalado, mismo Qwen3-0.6B; sin herramientas del agente ni GUI." };
             using var huge = new StringContent(JsonSerializer.Serialize(new { messages = new[] { new { role = "user", content = string.Join(' ', Enumerable.Repeat("hola", 5000)) } }, max_tokens = 512 }), Encoding.UTF8, "application/json");
             using var rejected = await http.PostAsync(new Uri(EngineHost.Endpoint, "v1/chat/completions"), huge, timeout.Token);
             var rejection = await rejected.Content.ReadAsStringAsync(timeout.Token);

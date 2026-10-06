@@ -79,7 +79,7 @@ internal sealed class SkillRegistry(Preferences preferences)
         var canonical = input.ToLowerInvariant();
         if (Regex.IsMatch(canonical, @"https?://|pestaña|pestalla|navegador|página web|enlace")) names.Add("browser");
         if (Regex.IsMatch(canonical, @"\bpc\b|ventana|escritorio|aplicación")) names.Add("desktop");
-        if (Regex.IsMatch(canonical, @"modelo|strata|gráfica|\bgpu\b|razonamiento|portátil|laptop|batería|ahorro")) names.Add("models");
+        if (Regex.IsMatch(canonical, @"modelo|strata|gráfica|\bgpu\b|razonamiento|portátil|laptop|batería|ahorro|rendimiento|modo rápido|qwen")) names.Add("models");
         if (Regex.IsMatch(canonical, @"código|archivo|función|corrige|proyecto|bug|refactor")) names.Add("code");
         foreach (var skill in Items.Where(s => s.Triggers.Length > 0))
             if (skill.Triggers.Split('|').Any(t => canonical.Contains(t, StringComparison.OrdinalIgnoreCase))) names.Insert(0, skill.Name);

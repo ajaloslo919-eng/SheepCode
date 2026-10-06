@@ -3,8 +3,8 @@
 set -eu
 task_root=/mnt/c/Users/sk/Desktop/plugin/sheepcode-work
 task_source="$task_root/SheepCode-github/engine/strata-cpu"
-task_installed="$task_root/checks/installed-celeron"
-task_vm="$task_root/checks/strata-cpu-vm"
+task_installed="${SHEEPCODE_CPU_INSTALLATION:-$task_root/checks/setup-installed-celeron}"
+task_vm="${STRATA_CPU_CHECK_DIR:-$task_root/checks/strata-cpu-vm}"
 mkdir -p "$task_vm/root/bin" "$task_vm/root/proc" "$task_vm/root/sys" "$task_vm/root/dev" "$task_vm/root/tmp"
 cmake -S "$task_source" -B "$task_source/build-linux" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_GGML_DIR=/mnt/e/SheepGPTAI/engines/strata/development/llama-src -DSTRATA_CPU_STATIC_LINUX=ON > "$task_vm/build-linux.log" 2>&1
 cmake --build "$task_source/build-linux" --target strata-cpu -j 4 >> "$task_vm/build-linux.log" 2>&1

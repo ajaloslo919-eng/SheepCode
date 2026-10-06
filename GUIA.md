@@ -18,6 +18,14 @@ Los modelos se descargan de repositorios fijados por revisión y se verifican po
 
 La voz expresiva Ono_Anna permanece en la RX 580 cuando se reutiliza su instalación original. Un PC que carece del paquete neuronal RX 580 trabaja por texto y puede usar dictado; la lectura de voz figura **sin configurar** y no se sustituye por una voz diferente. Este setup no descarga ni convierte el paquete neuronal de voz.
 
+## Qwen rápido ⚡
+
+El perfil Strata CPU con Qwen3-0.6B usa un cálculo Q8 SSE2 optimizado, conserva la caché de tokens entre herramientas y exige los campos completos de cada acción. Mantiene contexto 4096 y presupuesto 1536 MiB.
+
+La casilla **⚡ Qwen rápido** activa instrucciones breves, descubre las 55 skills a demanda y prelee el archivo abierto si lo mencionas. También puedes escribir o dictar y aceptar «Activa el modo rápido», «Desactiva el modo rápido» y «Estado del rendimiento». Requiere la skill models activa; el modelo solo consulta `performance_status`. Desactivar la casilla restaura instrucciones más amplias y el catálogo inicial; las mejoras SSE2 y de caché siguen en el motor.
+
+Las propuestas conservan su diff y protección ante ediciones concurrentes. El tiempo de `performance_status` pertenece al motor; el flujo completo añade herramientas, GUI y voz. El modelo sigue siendo pequeño: revisa y prueba el código.
+
 ## Portátiles 💻🔋
 
 Se admite Windows 10/11 x64 en portátiles Intel y AMD. El setup detecta el chasis, batería/corriente y GPU integrada o dedicada. La lista de gráficas combina DXGI con los dispositivos presentes de Windows/PnP: una RTX registrada que DXGI no exponga aparece con «VRAM sin verificar», junto con el estado del controlador. Solo se usa después de verificar su identidad y memoria mediante Vulkan. No se inventa una GPU que Windows no enumere, no se habilita una tarjeta desactivada ni se cambia el modo de GPU del fabricante. Si esperas una RTX ausente, comprueba el controlador y el modo de GPU del portátil y pulsa **Volver a detectar**. El panel admite desplazamiento para leer la lista completa.
@@ -88,7 +96,7 @@ Una instalación de modelo nueva guarda el perfil anterior cuando existe, y solo
 
 Abre **Skills → Actualizar** o escribe/dicta y acepta `Busca actualizaciones`, `Descarga la actualización` y `Instala la actualización`. Busca releases estables del repositorio público, verifica tamaño, SHA-256 y digest de GitHub cuando esté disponible, y vuelve a comprobar el archivo antes de ejecutarlo. La descarga se conserva en caché entre aperturas. Si se corta, puedes repetirla; el actualizador de setups no reanuda `.part`.
 
-Al instalar se pide guardar el editor si tiene cambios y se cierra SheepCode antes de abrir el setup con la carpeta actual seleccionada. El modo actualización cambia app/source y **no descarga ni sustituye modelos**. El setup guarda la versión anterior de app/source en `backups`; conserva ajustes, conexiones, skills, sesiones, propuestas, dictado, modelos y voz. Puedes revisar las ediciones antiguas de `source` en ese respaldo.
+Al instalar se pide guardar el editor si tiene cambios y se cierra SheepCode antes de abrir el setup con la carpeta actual seleccionada. El modo actualización cambia app/source y **no descarga ni sustituye modelos**. Si está seleccionado el runtime estándar Strata CPU, instala también su binario verificado y respalda el anterior; conserva su perfil y sus pesos. Un ejecutable CPU con ruta personalizada se conserva y debe actualizarse manualmente. El setup guarda la versión anterior de app/source en `backups`; conserva ajustes, conexiones, skills, sesiones, propuestas, dictado, modelos y voz. Puedes revisar las ediciones antiguas de `source` en ese respaldo.
 
 La búsqueda automática viene desactivada. Actívala con el checkbox o `Activa la búsqueda automática de actualizaciones`; consulta una vez al día mientras la app está abierta y avisa cuando haya una nueva release. `Desactiva la búsqueda automática de actualizaciones` la retira. Descargar e instalar siguen siendo acciones humanas. `Desactiva la skill updater` bloquea sus herramientas. También puedes abrir un setup descargado manualmente con `--target "D:\SheepCode" --upgrade`.
 

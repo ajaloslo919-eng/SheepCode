@@ -59,6 +59,7 @@ internal sealed class Preferences
     public List<string> DisabledSkills { get; set; } = [];
     public string PortableMode { get; set; } = "auto";
     public bool AutoCheckUpdates { get; set; }
+    public bool FastCpuMode { get; set; } = true;
     public static string PathName => Path.Combine(AppPaths.State, "preferences.json");
     public static Preferences Load()
     {

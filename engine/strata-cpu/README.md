@@ -8,6 +8,8 @@ El proceso limita memoria, mapea los pesos sin bloquear páginas ni duplicarlos 
 
 API privada en `127.0.0.1`: `/health`, `/v1/models`, `/apply-template`, `/tokenize`, `/v1/chat/completions`, `/cancel`. Cuenta tokens reales antes de admitir una entrada y reserva su salida. La salida JSON aplica gramática. Una petición incompleta no se ejecuta como herramienta. Cancelar detecta desconexión y comprueba el callback de CPU; SheepCode también puede terminar únicamente su proceso propio.
 
+La versión 0.1.1 añade `src/cpu/q8_sse2.c`: producto escalar Q8 firmado vectorizado mediante SSE2, incluidos valores -128, sin SSSE3/AVX, pesos duplicados ni cambio de modelo. Verifica sus resultados contra una suma escalar al cargar. CMake reemplaza ese símbolo en una copia de compilación de la dependencia; conserva el checkout fijado. El prefijo no pensante se conserva también en mensajes anteriores del asistente para reutilizar sus tokens generados. `/prompt-count` cuenta la misma plantilla en una sola consulta. `response_format.grammar` permite la gramática GBNF de acciones del agente, limitada a 32 KiB; la validación y los permisos siguen en SheepCode. La telemetría separa tokens en caché, tokens evaluados, prefill y generación.
+
 Compilación independiente con CMake 3.24+, C++17 y Ninja:
 
 ```sh
@@ -17,6 +19,6 @@ cmake --build engine/strata-cpu/build --target strata-cpu --parallel 2
 
 `STRATA_GGML_DIR` permite usar un checkout local del commit indicado. En Windows, `packaging/build-strata-cpu.ps1` prepara un ZIP y hashes para el setup, con Visual Studio 2022 C++ y Windows SDK. Compila con instrucciones x64/SSE2, sin CUDA/HIP/Vulkan/AVX/OpenMP. En Linux, `STRATA_CPU_STATIC_LINUX=ON` permite compilar el binario para la prueba de compatibilidad aislada.
 
-Integración en el árbol original de Strata: copiar `cmake/StrataLowMemory.cmake` y `src/cpu/server.cpp`, y activar el bloque de `upstream-integration.patch`; configurar `-DSTRATA_LOW_MEMORY_CPU=ON`. La opción retorna antes de preparar el backend GPU. Los cambios locales RX 580 se conservan.
+Integración en el árbol original de Strata: copiar `cmake/StrataLowMemory.cmake`, `src/cpu/server.cpp` y `src/cpu/q8_sse2.c`, y activar el bloque de `upstream-integration.patch`; configurar `-DSTRATA_LOW_MEMORY_CPU=ON`. La opción retorna antes de preparar el backend GPU. Los cambios locales RX 580 se conservan.
 
 El setup selecciona este perfil con menos de 8 GB o sin AVX2. También se puede elegir explícitamente. Modelos y estado permiten comprobar, activar, desactivar y restaurar el perfil anterior mediante entrada humana de texto o dictado aceptado; el modelo no puede otorgarse permisos ni instalar pesos. En equipos sin el paquete y adaptador RX 580, esa voz figura como sin configurar. La voz neuronal original conserva su backend e identidad.

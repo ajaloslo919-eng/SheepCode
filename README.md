@@ -8,6 +8,8 @@ SheepCode es una aplicación experimental para **Windows 10/11 x64**. Abre una c
 
 🌱 **Strata CPU para Celeron / 4 GB:** backend del fork con Qwen3-0.6B, CPU x64/SSE2 sin exigir AVX, contexto 4096 y memoria limitada. El setup lo recomienda en equipos pequeños o sin AVX2. Usa la biblioteca densa llama.cpp/ggml del commit fijado por Strata y conserva el backend original de dos GPU. Código y límites en [engine/strata-cpu](engine/strata-cpu/README.md). La compatibilidad de memoria e instrucciones se verifica mediante emulación; la GUI y las herramientas se prueban en Windows. No equivale a medir un Celeron físico.
 
+⚡ **Qwen rápido:** cálculo Q8 vectorizado con SSE2, caché entre pasos y acciones con campos completos. El modo rápido viene activado: carga las skills a demanda y lee primero el archivo abierto mencionado. Puedes cambiarlo con la casilla **⚡ Qwen rápido** o «Activa/Desactiva el modo rápido». En una prueba de creación del mismo archivo y modelo en el PC de desarrollo, el flujo bajó de 94 a 25 segundos; no predice la velocidad de otros equipos. [Medición y límites](docs/VALIDACION.md).
+
 ## ✨ Tu taller
 
 - Editor, explorador, chat y propuestas de cambios con aplicar, rechazar y deshacer.
