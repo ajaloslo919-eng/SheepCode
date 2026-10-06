@@ -35,6 +35,6 @@ internal static class PortableDiagnostics
             AppPaths.SaveJson(path, new { status = "complete", scope = "Fixtures de portátiles y controles del programa instalado; no usa modelos alternativos, batería física ni benchmarks.", checks, actualHardware = HardwareScanner.Scan(AppPaths.ModelRoot), installedExecutable = Environment.ProcessPath }); return 0;
         }
         catch (Exception e) { AppPaths.SaveJson(path, new { status = "failed", checks, error = e.ToString() }); return 1; }
-        finally { if (saved is not null) File.WriteAllBytes(Preferences.PathName, saved); }
+        finally { if (saved is not null) File.WriteAllBytes(Preferences.PathName, saved); else if (File.Exists(Preferences.PathName)) File.Delete(Preferences.PathName); }
     }
 }

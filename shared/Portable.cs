@@ -64,7 +64,7 @@ internal sealed record LaunchPolicy(bool Saving, string Mode, int Threads, int C
     internal static LaunchPolicy For(RuntimeProfile profile, string mode, PowerInfo power)
     {
         var saving = IsSaving(mode, power);
-        var limited = saving && profile.Kind == "llama";
+        var limited = saving && profile.NativeExecutable;
         return new(saving, mode, limited ? Math.Min(profile.Threads, 4) : profile.Threads,
             limited ? Math.Min(profile.Context, 4096) : profile.Context, limited ? "none" : profile.Devices, limited ? 0 : profile.GpuLayers,
             limited ? "Ahorro: CPU, hasta 4 hilos y contexto 4096. Se aplica al cargar; no cambia el modelo ni la voz." :

@@ -58,8 +58,21 @@ internal static class Diagnostics
             Assert(workspace.Read("calculator.py").Text.Contains("edición posterior"), "Se perdió la edición posterior.");
             rows.Add(new { check = "concurrent-edits-protected", passed = true });
             await agent.SubmitAsync("Desactiva las comprobaciones", CancellationToken.None);
-            await agent.SubmitAsync("Activa la voz", CancellationToken.None);
-            Assert(prefs.ReadAloud && !prefs.AllowChecks, "No se verificó la activación o desactivación.");
+            var voiceConfigured = File.Exists(Path.Combine(AppPaths.State, "tts-config.json")) && File.Exists(AppPaths.VoicePython);
+            if (voiceConfigured)
+            {
+                await agent.SubmitAsync("Activa la voz", CancellationToken.None);
+                Assert(prefs.ReadAloud && !prefs.AllowChecks, "No se verificó la activación o desactivación.");
+            }
+            else
+            {
+                await agent.SubmitAsync("Desactiva la voz", CancellationToken.None);
+                try { await agent.SubmitAsync("Activa la voz", CancellationToken.None); throw new Exception("Se habilitó una voz ausente."); }
+                catch (InvalidOperationException e) when (e.Message.Contains("sin configurar", StringComparison.Ordinal)) { }
+                Assert(!prefs.ReadAloud && !prefs.AllowChecks, "La voz ausente cambió los permisos o la lectura.");
+            }
+            rows.Add(new { check = "voice-configuration-or-explicit-unavailable-guard", passed = true, voiceConfigured,
+                scope = "Control humano y presencia de configuración; no carga, sintetiza ni sustituye el backend neuronal." });
             await agent.SubmitAsync("Desactiva la voz", CancellationToken.None);
             await agent.SubmitAsync("Ajusta el razonamiento a bajo", CancellationToken.None);
             Assert(!prefs.ReadAloud && prefs.Reasoning == "low", "No se configuró el diálogo.");
@@ -91,7 +104,7 @@ internal static class Diagnostics
             return 0;
         }
         catch (Exception e) { AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "self-test.json"), new { status = "failed", rows, error = e.ToString() }); return 1; }
-        finally { if (savedBytes is not null) File.WriteAllBytes(Preferences.PathName, savedBytes); else saved.Save(); }
+        finally { if (savedBytes is not null) File.WriteAllBytes(Preferences.PathName, savedBytes); else if (File.Exists(Preferences.PathName)) File.Delete(Preferences.PathName); }
     }
     internal static async Task<int> AgentCheckAsync()
     {

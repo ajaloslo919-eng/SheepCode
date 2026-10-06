@@ -35,7 +35,9 @@ internal sealed class RuntimeProfile
     public int Threads { get; set; } = 4;
     public int Port { get; set; } = 8088;
     public bool RequireRx580Voice { get; set; }
-    internal bool Configured => Kind is "llama" or "strata" or "strata-dual";
+    public int MemoryMiB { get; set; } = 1536;
+    internal bool Configured => Kind is "llama" or "strata" or "strata-dual" or "strata-cpu";
+    internal bool NativeExecutable => Kind is "llama" or "strata-cpu";
     internal static RuntimeProfile Load(string root)
     {
         var path = Path.Combine(root, "state", "engine.json");
@@ -43,6 +45,8 @@ internal sealed class RuntimeProfile
         {
             var profile = JsonSerializer.Deserialize<RuntimeProfile>(File.ReadAllText(path), DistributionJson.Options) ?? new();
             if (profile.Port is < 1024 or > 65535 || profile.Context is < 2048 or > 32768) throw new InvalidDataException("Perfil de motor no válido.");
+            if (profile.Kind == "strata-cpu" && (profile.Context > 4096 || profile.Threads is < 1 or > 4 || profile.MemoryMiB is < 1280 or > 2048 || profile.GpuLayers != 0 || profile.Devices != "none"))
+                throw new InvalidDataException("El perfil Strata CPU necesita contexto hasta 4096, 1–4 hilos y presupuesto 1280–2048 MiB, sin GPU.");
             return profile;
         }
         return File.Exists(Path.Combine(root, "state", "strata.json")) ? new()

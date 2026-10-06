@@ -13,6 +13,18 @@ internal static class WorkflowDiagnostics
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token));
+            if (request.RequestUri!.AbsolutePath == "/apply-template") return new(HttpStatusCode.OK)
+            { Content = new StringContent(JsonSerializer.Serialize(new { prompt = document.RootElement.GetProperty("messages").GetRawText() }), Encoding.UTF8, "application/json") };
+            if (request.RequestUri.AbsolutePath == "/tokenize")
+            {
+                using var messages = JsonDocument.Parse(document.RootElement.GetProperty("content").GetString()!);
+                var count = 96 + messages.RootElement.EnumerateArray().Sum(m => 12 + (Encoding.UTF8.GetByteCount(m.GetProperty("content").GetString()!) + 3) / 4);
+                // Deterministic tokenizer fixture: after the forced HTTP 400 its count
+                // corrects an initial underestimate, exercising native prompt compaction.
+                if (Requests.Count > 0) count = (int)Math.Ceiling(count * 1.5);
+                return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { tokens = Enumerable.Repeat(1, count).ToArray() }), Encoding.UTF8, "application/json") };
+            }
+            if (request.RequestUri.AbsolutePath != "/v1/chat/completions") return new(HttpStatusCode.NotFound);
             Requests.Add(document.RootElement.GetProperty("messages").EnumerateArray().Select(m => new ModelMessage(m.GetProperty("role").GetString()!, m.GetProperty("content").GetString()!)).ToArray());
             if (Requests.Count == 1) return new(HttpStatusCode.BadRequest) { Content = new StringContent("{\"error\":{\"code\":400,\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":4228,\"n_ctx\":4096}}") };
             return new(HttpStatusCode.OK) { Content = new StringContent("{\"choices\":[{\"message\":{\"content\":\"{\\\"action\\\":\\\"finish\\\",\\\"message\\\":\\\"La pestaña sigue abierta.\\\"}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"completion_tokens\":20}}", Encoding.UTF8, "application/json") };
@@ -36,7 +48,7 @@ internal static class WorkflowDiagnostics
         {
             CheckContextAsync(rows).GetAwaiter().GetResult(); CheckProposalAsync(rows).GetAwaiter().GetResult(); CheckStopButton(rows);
             AppPaths.SaveJson(report, new { status = "complete", rows,
-                scope = "Herramientas y GUI reales de la aplicación instalada con HTTP y acciones programadas; proceso auxiliar propio cancelado. No mide IA ni certifica la página externa de Discord." }); return 0;
+                scope = "Herramientas y GUI reales de la aplicación instalada con HTTP, tokenizador y acciones simuladas; proceso auxiliar propio cancelado. No mide IA ni certifica la página externa de Discord." }); return 0;
         }
         catch (Exception e) { AppPaths.SaveJson(report, new { status = "failed", rows, error = e.ToString() }); return 1; }
         finally { File.WriteAllBytes(Preferences.PathName, saved); }

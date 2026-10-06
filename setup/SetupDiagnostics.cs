@@ -56,7 +56,7 @@ internal static class SetupDiagnostics
             var strong = new SystemHardware("fixture", true, 16, "CPU", true, 64L * 1073741824, 32L * 1073741824, 200L * 1073741824, "C:\\", [new(0, "NVIDIA RTX 4080", 0x10de, 16L * 1073741824, false)]);
             Assert(ModelCatalog.Recommend(strong).Kind == "strata", "Un equipo compatible no recibió Strata.");
             Assert(ModelCatalog.Recommend(strong, "existing").Kind == "reuse", "No se priorizó la instalación existente.");
-            Assert(ModelCatalog.Recommend(strong with { Avx2 = false }).Kind == "llama", "Se recomendó Strata AVX2 para CPU antigua.");
+            Assert(ModelCatalog.Recommend(strong with { Avx2 = false }).Kind == "strata-cpu", "La CPU sin AVX2 no recibió Strata CPU portable.");
             try { ModelCatalog.Recommend(strong with { X64 = false }); throw new IOException("Se aceptó arquitectura no soportada."); } catch (PlatformNotSupportedException) { }
             try { SafeFiles.Child(root, @"..\escaped.txt"); throw new IOException("Ruta fuera de destino aceptada."); } catch (IOException e) when (e.Message.StartsWith("Ruta fuera")) { }
             var zip = Path.Combine(root, "unsafe.zip"); using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create)) { using var writer = new StreamWriter(archive.CreateEntry("../escaped.txt").Open()); writer.Write("test"); }

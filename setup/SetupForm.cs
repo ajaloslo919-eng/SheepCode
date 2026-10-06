@@ -84,6 +84,7 @@ internal sealed class SetupForm : Form
                 description.Text = "Actualizar app y código editable. El setup respalda la versión anterior y conserva modelos, dictado, conexiones, proyectos, ajustes y voz neuronal. No descarga un modelo nuevo."; install.Enabled = true; return;
             }
             recommended = ModelCatalog.Recommend(system, ModelCatalog.FindExisting()); choice.Items.Clear(); choice.Items.Add(recommended);
+            if (recommended.Kind != "strata-cpu") choice.Items.Add(ModelCatalog.LowMemory());
             if (recommended.Kind == "reuse" && ModelCatalog.StrataHardware(system) && system.DiskFreeBytes >= 100L * 1073741824) choice.Items.Add(ModelCatalog.Strata());
             foreach (var model in ModelCatalog.Models.Where(m => m.Size < (recommended.Model?.Size ?? long.MaxValue) && m.Size + 3L * 1073741824 < system.DiskFreeBytes && m.Size * 1.25 + 700_000_000 < ModelCatalog.MemoryBudget(system)).Reverse())
                 choice.Items.Add(new InstallPlan(model.Id, "🌱 " + model.Label + " · alternativa más ligera", "llama", "Descarga más pequeña y menor uso de memoria; revisa los cambios de código que proponga. Usa Vulkan si se verifica o CPU explícitamente.", model.Size, system.Portable || system.RamGiB < 7.5 ? 4096 : 8192, model));

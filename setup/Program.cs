@@ -19,7 +19,7 @@ internal static class SetupProgram
                 if (args.Contains("--reuse-strata")) plan = ModelCatalog.Reuse(ModelCatalog.FindExisting() ?? throw new IOException("No hay Strata para reutilizar."));
                 else if (args.Contains("--small-profile"))
                 {
-                    var model = ModelCatalog.Models.First(m => m.Id == "qwen3-0.6b"); plan = new(model.Id, model.Label, "llama", "Perfil instalado para validación funcional del setup; sin comparativas de rendimiento.", model.Size, 4096, model);
+                    plan = ModelCatalog.LowMemory();
                 }
                 else plan = ModelCatalog.EditorOnly();
                 Installer.InstallAsync(new(root, models, plan, false, false, false, false), null, CancellationToken.None).GetAwaiter().GetResult(); return 0;

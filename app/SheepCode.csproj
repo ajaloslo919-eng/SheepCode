@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>SheepCode</AssemblyName>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>sheep.ico</ApplicationIcon>
   </PropertyGroup>
@@ -23,6 +23,7 @@
     <Content Include="skills\**\SKILL.md" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\shared\*.cs" Link="Distribution\%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\shared\model-catalog.json" LogicalName="SheepCode.model-catalog.json" />
+    <EmbeddedResource Include="..\shared\strata-cpu.json" LogicalName="SheepCode.strata-cpu.json" />
     <EmbeddedResource Include="..\shared\dictation-model.json" LogicalName="SheepCode.dictation-model.json" />
   </ItemGroup>
 </Project>

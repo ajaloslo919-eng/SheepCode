@@ -11,7 +11,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
     internal static Uri Endpoint => new($"http://127.0.0.1:{RuntimeProfile.Load(AppPaths.Root).Port}/");
     internal RuntimeProfile Profile => RuntimeProfile.Load(AppPaths.Root);
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly HttpClient _http = transport ?? new() { Timeout = TimeSpan.FromSeconds(360) };
+    private readonly HttpClient _http = transport ?? new() { Timeout = TimeSpan.FromMinutes(20) };
     private Process? _server = ownedServer;
     private int? _reportedContext;
     private bool _tokenizerUnavailable;
@@ -38,7 +38,19 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
     internal object Snapshot() => new { state = State, ready = Ready, model = Model, endpoint = Endpoint.ToString(),
         profile = Profile.Kind, configured = Profile.Configured, configuredGpu = Profile.DeviceDescription,
         contextTokens = EffectiveContext, configuredContextTokens = Profile.Context, activeLaunch = ActiveLaunch, portable = PortableStatus(), rx580Execution = Profile.Kind == "strata-dual" ? Peer() : null,
-        lastGeneration = LastGeneration, voice = voice.Snapshot(), automaticFallback = false };
+        lowMemoryCpu = CpuMemory(), lastGeneration = LastGeneration, voice = voice.Snapshot(), automaticFallback = false };
+    private object? CpuMemory()
+    {
+        if (Profile.Kind != "strata-cpu") return null;
+        long? resident = null, peak = null, committed = null;
+        try
+        {
+            if (_server is { HasExited: false }) { _server.Refresh(); resident = _server.WorkingSet64; peak = _server.PeakWorkingSet64; committed = _server.PrivateMemorySize64; }
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        return new { isaFloor = "x64/SSE2", memoryLimitMiB = Profile.MemoryMiB, residentBytes = resident, peakResidentBytes = peak,
+            privateCommittedBytes = committed, reasoning = "none", scope = "Proceso propio Strata CPU; el límite Windows cubre memoria privada, no todas las páginas mapeadas ni la GUI/pestañas/Windows." };
+    }
     internal object PortableStatus()
     {
         var power = PowerScanner.Read(); var mode = Preferences.Load().PortableMode;
@@ -60,9 +72,9 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             if (Ready) return;
             var profile = Profile;
             if (!profile.Configured) throw new FileNotFoundException("No hay un modelo instalado. Usa Modelos → Analizar e instalar, o el setup.");
-            if (profile.Kind != "llama" && (!File.Exists(AppPaths.EngineConfig) || !File.Exists(AppPaths.StrataPython)))
+            if (!profile.NativeExecutable && (!File.Exists(AppPaths.EngineConfig) || !File.Exists(AppPaths.StrataPython)))
                 throw new FileNotFoundException("Falta el runtime de Strata configurado. Repara la instalación desde el setup.");
-            if (Process.GetProcessesByName("VrcLocalCompanion").Any(p => !p.HasExited))
+            if (profile.Kind != "strata-cpu" && Process.GetProcessesByName("VrcLocalCompanion").Any(p => !p.HasExited))
                 throw new InvalidOperationException("Cierra SheepGPT antes de cargar SheepCode: ambas aplicaciones necesitan la memoria de estas GPU.");
             if (profile.RequireRx580Voice) { SetState("Preparando voz RX 580…"); await voice.EnsureAsync(token); }
             if (_server is null || _server.HasExited)
@@ -71,13 +83,15 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
                 try { listener.Start(); } catch (System.Net.Sockets.SocketException) { throw new InvalidOperationException($"El puerto privado {profile.Port} está ocupado. Cierra la otra instancia o ajusta el perfil."); } finally { listener.Stop(); }
                 if (profile.Kind == "strata-dual" && File.Exists(AppPaths.PeerStatus)) File.Delete(AppPaths.PeerStatus);
                 ActiveLaunch = LaunchPolicy.For(profile, Preferences.Load().PortableMode, PowerScanner.Read());
-                var start = new ProcessStartInfo(profile.Kind == "llama" ? InstallationPaths.Resolve(AppPaths.Root, profile.Executable) : AppPaths.StrataPython)
+                var start = new ProcessStartInfo(profile.NativeExecutable ? InstallationPaths.Resolve(AppPaths.Root, profile.Executable) : AppPaths.StrataPython)
                 {
-                    WorkingDirectory = profile.Kind == "llama" ? Path.GetDirectoryName(InstallationPaths.Resolve(AppPaths.Root, profile.Executable))! : AppPaths.Runtime, UseShellExecute = false, CreateNoWindow = true,
+                    WorkingDirectory = profile.NativeExecutable ? Path.GetDirectoryName(InstallationPaths.Resolve(AppPaths.Root, profile.Executable))! : AppPaths.Runtime, UseShellExecute = false, CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true,
                     StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
                 };
-                var arguments = profile.Kind == "llama" ? new[] { "--model", InstallationPaths.Resolve(AppPaths.Root, profile.ModelFile), "--alias", profile.ModelId,
+                var arguments = profile.Kind == "strata-cpu" ? new[] { "--model", InstallationPaths.Resolve(AppPaths.Root, profile.ModelFile), "--alias", profile.ModelId,
+                    "--port", profile.Port.ToString(), "--ctx-size", ActiveLaunch.Context.ToString(), "--threads", ActiveLaunch.Threads.ToString(), "--memory-mib", profile.MemoryMiB.ToString() } :
+                    profile.Kind == "llama" ? new[] { "--model", InstallationPaths.Resolve(AppPaths.Root, profile.ModelFile), "--alias", profile.ModelId,
                     "--host", "127.0.0.1", "--port", profile.Port.ToString(), "--ctx-size", ActiveLaunch.Context.ToString(), "--parallel", "1", "--threads", ActiveLaunch.Threads.ToString(),
                     "--device", ActiveLaunch.Devices, "--gpu-layers", ActiveLaunch.GpuLayers.ToString(), "--split-mode", "layer", "--jinja", "--reasoning-budget", "256", "--no-webui" } :
                     new[] { "-u", Path.Combine(AppPaths.Runtime, "serve", "server.py"), "--engine", "strata", "--config", AppPaths.EngineConfig, "--host", "127.0.0.1", "--port", profile.Port.ToString() };
@@ -145,6 +159,10 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
     }
     internal async Task<string> CompleteTransportAsync(IReadOnlyList<ModelMessage> messages, string reasoning, CancellationToken token)
     {
+        if (Profile.Kind == "strata-cpu") reasoning = "none";
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(Profile.Kind == "strata-cpu" ? TimeSpan.FromMinutes(20) : TimeSpan.FromSeconds(360));
+        token = timeout.Token;
         var contextRetries = 0; var estimateScale = 1d;
         for (var attempt = 0; attempt < 3; attempt++)
         {
@@ -153,6 +171,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             var available = EffectiveContext - mandatory - budget - 96 - 512;
             if (available < 256) throw new InvalidOperationException("La petición y las instrucciones no dejan espacio para una acción. Acorta la petición o la skill.");
             var limit = Math.Min(ModelProtocol.OutputBudget(attempt, EffectiveContext), available);
+            if (Profile.Kind == "strata-cpu") limit = Math.Min(limit, 1536);
             var packed = await PromptContext.FitAsync(messages, EffectiveContext, limit + budget,
                 (items, ct) => CountPromptAsync(items, reasoning, ct, estimateScale), token);
             var body = new { model = Model, messages = packed.Select(m => new { role = m.Role, content = m.Content }),
@@ -182,7 +201,8 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             var finish = choice.GetProperty("finish_reason").GetString();
             LastGeneration = new { seconds = clock.Elapsed.TotalSeconds, model = Model, finishReason = finish, reasoning,
                 contextTokens = EffectiveContext, promptCompacted = !packed.SequenceEqual(messages),
-                usage = data.RootElement.GetProperty("usage").Clone(), scope = "Generación del componente " + Profile.Kind + " activo e integrado en SheepCode; excluye herramientas, voz y reproducción." };
+                usage = data.RootElement.GetProperty("usage").Clone(), backend = data.RootElement.TryGetProperty("strata", out var stats) ? (JsonElement?)stats.Clone() : null,
+                scope = "Generación del componente " + Profile.Kind + " activo e integrado en SheepCode; excluye herramientas, voz y reproducción." };
             if (finish != "length" && text.Length > 0) return text;
         }
         throw new InvalidOperationException("El motor no terminó una acción JSON tras tres intentos. Pide un archivo pequeño o una sustitución concreta; no se ejecutó la acción incompleta.");
@@ -190,7 +210,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
     private async Task<int> CountPromptAsync(IReadOnlyList<ModelMessage> messages, string reasoning, CancellationToken token, double estimateScale = 1d)
     {
         int Estimate() => (int)Math.Ceiling(PromptContext.Estimate(messages) * estimateScale);
-        if (Profile.Kind != "llama" || _tokenizerUnavailable) return Estimate();
+        if (!Profile.NativeExecutable || _tokenizerUnavailable) return Estimate();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         async Task<JsonDocument?> Query(string path, object body)
         {

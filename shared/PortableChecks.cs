@@ -13,12 +13,15 @@ internal static class PortableChecks
                 [new(0, "Intel(R) Iris(R) Xe Graphics", 0x8086, 128L * 1048576, false, SharedBytes: ram * gib / 2)], true, ac, "SMBIOS 10");
             var plan = ModelCatalog.Recommend(hardware);
             Assert(plan.Id == expected && plan.Context == 4096, "Perfil portátil incorrecto con " + ram + " GB.");
+            if (ram == 4) Assert(plan.Kind == "strata-cpu", "El equipo de 4 GB no recibió el motor nativo Strata CPU.");
             Assert(hardware.Gpus[0].Integrated, "La GPU integrada se trató como VRAM adicional.");
             if (ram >= 16) Assert(ModelCatalog.Recommend(hardware with { Power = battery }).Id == "qwen3-4b", "La batería no recibió un perfil pequeño.");
             rows.Add(new { check = "portable-model-capacity", ram, selected = plan.Id, context = plan.Context });
         }
         var hybrid = new SystemHardware("fixture", true, 16, "Laptop CPU", true, 32 * gib, 24 * gib, 200 * gib, "C:\\",
             [new(0, "Intel Iris Xe Graphics", 0x8086, 128L * 1048576, false, SharedBytes: 16 * gib), new(1, "NVIDIA GeForce RTX 4060 Laptop GPU", 0x10de, 8 * gib, false, SharedBytes: 16 * gib)], true, ac);
+        var celeron = ModelCatalog.Recommend(hybrid with { RamBytes = 4 * gib, Threads = 2, Avx2 = false, Cpu = "Celeron" });
+        Assert(celeron.Kind == "strata-cpu" && celeron.Id == "qwen3-0.6b", "Celeron sin AVX2 no seleccionó el perfil pequeño.");
         var probes = new[] { new VerifiedGpu("Vulkan0", "Intel Iris Xe Graphics", 16 * gib), new VerifiedGpu("Vulkan1", "NVIDIA GeForce RTX 4060 Laptop GPU", 7 * gib) };
         var chosen = GpuPlanner.Choose(hybrid, probes, 5 * gib);
         Assert(chosen.Devices == "Vulkan1" && chosen.BudgetBytes <= 7 * gib, "Se sumó la RAM integrada al presupuesto de la GPU portátil.");

@@ -22,6 +22,9 @@ foreach($taskPin in $taskPinned){
     if(!(Test-Path -LiteralPath $taskFile)){if($ReuseDownloads){throw ('Falta el archivo fijado '+$taskPin.file)}; Invoke-WebRequest -Uri $taskPin.url -OutFile $taskFile}
     if((Get-FileHash -LiteralPath $taskFile -Algorithm $taskPin.algorithm).Hash -ne $taskPin.hash){throw ('Hash incorrecto: '+$taskPin.file)}
 }
+$taskCpuPackage=Join-Path $taskDownloads 'strata-cpu.zip'
+$taskCpuMeta=Get-Content -LiteralPath (Join-Path $taskWork 'shared\strata-cpu.json') -Raw | ConvertFrom-Json
+if(!(Test-Path -LiteralPath $taskCpuPackage) -or (Get-FileHash -LiteralPath $taskCpuPackage).Hash -ne $taskCpuMeta.sha256){throw 'Compila primero Strata CPU con packaging/build-strata-cpu.ps1; falta su paquete verificado.'}
 & dotnet build (Join-Path $taskApp 'SheepCode.csproj') -c Release --nologo --verbosity quiet
 if($LASTEXITCODE -ne 0){throw 'Falló la compilación de SheepCode.'}
 & dotnet build (Join-Path $taskWork 'setup\SheepCode.Setup.csproj') -c Release --nologo --verbosity quiet
@@ -34,13 +37,14 @@ New-Item -ItemType Directory -Path $taskPayload,$taskBundle,(Join-Path $taskPayl
 function Copy-SourceTree([string]$From,[string]$To){
     foreach($taskSourceFile in Get-ChildItem -LiteralPath $From -File -Recurse){
         $taskRelative=[IO.Path]::GetRelativePath($From,$taskSourceFile.FullName)
-        if($taskRelative -match '(^|[\\/])(bin|obj|build|downloads|tool-probe|backups|checks|__pycache__)([\\/]|$)' -or $taskRelative -match '\.(obj|res|exe|zip|pyc)$' -or $taskRelative -eq 'bootstrap.rc'){continue}
+        if($taskRelative -match '(^|[\\/])(bin|obj|build(?:-[^\\/]+)?|downloads|tool-probe|backups|checks|__pycache__)([\\/]|$)' -or $taskRelative -match '\.(obj|res|exe|zip|pyc)$' -or $taskRelative -eq 'bootstrap.rc'){continue}
         $taskCopy=Join-Path $To $taskRelative;New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($taskCopy)) -Force|Out-Null;Copy-Item -LiteralPath $taskSourceFile.FullName -Destination $taskCopy
     }
 }
 Copy-SourceTree $taskApp (Join-Path $taskPayload 'source\app')
 Copy-SourceTree (Join-Path $taskWork 'shared') (Join-Path $taskPayload 'source\shared')
 Copy-SourceTree (Join-Path $taskWork 'setup') (Join-Path $taskPayload 'source\setup')
+Copy-SourceTree (Join-Path $taskWork 'engine') (Join-Path $taskPayload 'source\engine')
 Copy-SourceTree $taskPackaging (Join-Path $taskPayload 'source\packaging')
 Copy-Item (Join-Path $taskPackaging 'build-source.ps1') (Join-Path $taskPayload 'source\build-source.ps1')
 Copy-Item (Join-Path $taskPackaging 'SheepCode.sln') (Join-Path $taskPayload 'source\SheepCode.sln')
@@ -54,6 +58,7 @@ Copy-Item (Join-Path $taskPackaging 'licenses') (Join-Path $taskPayload 'license
 $taskRuntimeRoot=Join-Path $taskPayload 'app\runtimes'
 if(Test-Path -LiteralPath $taskRuntimeRoot){foreach($taskPlatform in Get-ChildItem -LiteralPath $taskRuntimeRoot -Directory){if($taskPlatform.Name -ne 'win-x64'){$taskSafe=[IO.Path]::GetFullPath($taskPlatform.FullName);if(!$taskSafe.StartsWith([IO.Path]::GetFullPath($taskRuntimeRoot)+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Runtime fuera del paquete'};Remove-Item -LiteralPath $taskSafe -Recurse -Force}}}
 foreach($taskPackage in @('llama-cpu.zip','llama-vulkan.zip','strata-source.zip','python-3.12.10-amd64.exe','MicrosoftEdgeWebview2Setup.exe')){Copy-Item (Join-Path $taskDownloads $taskPackage) (Join-Path $taskPayload 'runtime\packages')}
+Copy-Item -LiteralPath $taskCpuPackage -Destination (Join-Path $taskPayload 'runtime\packages')
 $taskCrt='C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Redist\MSVC\14.44.35112\x64\Microsoft.VC143.CRT'
 if(!(Test-Path -LiteralPath $taskCrt)){throw 'Se requieren los redistribuibles CRT x64 de Visual Studio para la instalación local de los motores.'}
 Get-ChildItem -LiteralPath $taskCrt -Filter '*.dll'|Copy-Item -Destination (Join-Path $taskPayload 'app')

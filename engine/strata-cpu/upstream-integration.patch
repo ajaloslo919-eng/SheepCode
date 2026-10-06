@@ -1,0 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,4 +10,12 @@
+ cmake_minimum_required(VERSION 3.24)
+ project(strata VERSION 0.1.39 LANGUAGES CXX)
++# SheepCode fork: dense CPU mode for small x64 / SSE2 machines.
++option(STRATA_LOW_MEMORY_CPU "Build the bounded dense CPU backend" OFF)
++if(STRATA_LOW_MEMORY_CPU)
++  enable_language(C)
++  include(cmake/StrataLowMemory.cmake)
++  return()
++endif()
++
+ # EXPERIMENTAL: the Intel Arc engine, the SYCL port in sycl/ (PR #423; icpx + oneMKL, docs/INTEL_ARC.md). It is its
+ # own project that takes the unported sources from src/; with this on, nothing below is configured.

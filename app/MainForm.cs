@@ -215,7 +215,8 @@ internal sealed partial class MainForm : Form
         _refreshingSettings = true;
         _allowChecks.Checked = _preferences.AllowChecks; _readAloud.Checked = _preferences.ReadAloud;
         _readAloud.Enabled = File.Exists(Path.Combine(AppPaths.State, "tts-config.json")) && File.Exists(AppPaths.VoicePython);
-        _reasoning.SelectedIndex = Array.IndexOf(new[] { "none", "low", "medium", "high" }, _preferences.Reasoning);
+        _reasoning.Enabled = _engine.Profile.Kind != "strata-cpu";
+        _reasoning.SelectedIndex = _reasoning.Enabled ? Array.IndexOf(new[] { "none", "low", "medium", "high" }, _preferences.Reasoning) : 0;
         _emotion.SelectedItem = _preferences.Emotion; if (_emotion.SelectedIndex < 0) _emotion.SelectedItem = "neutral";
         _powerMode.SelectedIndex = Array.IndexOf(new[] { "auto", "eco", "performance" }, _preferences.PortableMode);
         _refreshingSettings = false;
@@ -224,7 +225,7 @@ internal sealed partial class MainForm : Form
     {
         if (_refreshingSettings) return;
         _preferences.AllowChecks = _allowChecks.Checked; _preferences.ReadAloud = _readAloud.Checked;
-        _preferences.Reasoning = new[] { "none", "low", "medium", "high" }[Math.Max(0, _reasoning.SelectedIndex)];
+        if (_reasoning.Enabled) _preferences.Reasoning = new[] { "none", "low", "medium", "high" }[Math.Max(0, _reasoning.SelectedIndex)];
         _preferences.Emotion = _emotion.SelectedItem as string ?? "neutral"; _preferences.Save();
         if (!_preferences.ReadAloud) _voice.Interrupt();
     }

@@ -11,6 +11,7 @@ internal static class ProtocolDiagnostics
         internal List<int> Budgets { get; } = [];
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
+            if (request.RequestUri!.AbsolutePath != "/v1/chat/completions") return new(HttpStatusCode.NotFound);
             using var data = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token));
             Budgets.Add(data.RootElement.GetProperty("max_tokens").GetInt32());
             if (Budgets.Count == 1 || alwaysFail) return new(HttpStatusCode.BadGateway)

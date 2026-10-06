@@ -1,76 +1,29 @@
-# 🌼 Validación de la entrega 0.3.0
+# 🌱 Validación de SheepCode 0.4.0 · Strata CPU
 
-Comprobaciones efectuadas el 5 de octubre de 2026 en Windows x64. Los informes privados conservan las rutas de instalación y preferencias; esta página recoge el alcance que se puede compartir.
+Trabajo del 6 de octubre de 2026. Se ejecuta exclusivamente el modelo seleccionado en la instalación propia de SheepCode y sus componentes integrados. No se comparan modelos ni se sustituyen resultados por otra IA.
 
-## Paquete e instalación
+## Compatibilidad de CPU y memoria del motor
 
-- Compilación de la aplicación y del setup con cero errores, incluida una compilación del árbol de fuentes preparado para GitHub.
-- Setup autoextraíble ejecutado para actualizar las instalaciones existentes de escritorio y AppData; preview del modo actualización en la carpeta actual.
-- 254 archivos del payload verificados por tamaño y SHA-256; código fuente editable incluido.
-- Preferencias conservadas exactamente durante la actualización y las pruebas. Perfil original de modelos, backend RTX + RX 580 y configuración de voz RX 580 conservados.
-- Descargas fijadas por revisión y hash; pruebas deterministas de reanudación HTTP y rechazo de datos corruptos.
+El fork de Strata añade STRATA_LOW_MEMORY_CPU. Se compila desde el árbol original de Strata y desde la carpeta editable engine/strata-cpu. El backend GPU/MoE y los cambios locales RX 580 se conservan. El backend denso usa la biblioteca MIT llama.cpp/ggml del mismo commit fijado por Strata; no ejecuta llama-server ni su servidor Python.
 
-## Portátiles y gráficas
+Modelo activo: Qwen3-0.6B Q8_0 oficial, revisión y SHA-256 fijados en el catálogo. La comprobación arranca un kernel Linux en QEMU TCG con **4096 MiB, dos CPU Conroe/Celeron 4x0 emuladas y sin AVX**. Usa el mismo código del backend y el modelo seleccionado en SheepCode. El sistema registra 4.014.680 KiB de RAM utilizable y cero swap. La salud confirma dense-cpu, contexto 4096, dos hilos, límite 1536 MiB y AVX/AVX2 compilados a cero.
 
-- Selección por capacidad para fixtures de 4, 8, 16 y 32 GB de RAM de portátil y perfiles de escritorio.
-- iGPU con RAM compartida, equipo híbrido, dos GPU de escritorio, adaptador desconocido y GPU desactivada.
-- Inventario DXGI combinado con dispositivos Windows/PnP presentes: VRAM desconocida permanece desconocida hasta validarse mediante Vulkan.
-- Una exposición lógica duplicada de DXGI se reduce a una tarjeta física; dos tarjetas físicas idénticas se conservan.
-- Modos automático, ahorro y perfil completo, con batería presente, ausente y estado desconocido.
-- Permisos y desactivación de la skill de modelos comprobados por el diálogo de la aplicación.
-- GUI real a 1366×728, 1024×650, 800×600 y 1520×900; editor, chat y compositor accesibles.
-- Setup a 990×900 y 800×600 con fixture Intel + RTX no expuesta por DXGI: ambas gráficas legibles, desplazamiento hasta la última línea y botón de instalación visible.
+Completa una respuesta JSON: 36 tokens de entrada y 10 de salida, terminada con stop. Memoria residente observada aproximadamente **1197 MiB**; espacio virtual aproximadamente **1398 MiB**. El invitado conserva aproximadamente **2583 MiB disponibles** después de generar. Los registros conservan CPU, meminfo y estado del proceso. Esto verifica instrucciones y memoria del **componente**; no mide la velocidad de un Celeron físico ni una GUI Windows dentro de la VM.
 
-Estas pruebas no certifican la RTX del portátil de una captura externa. No se ha medido autonomía, temperatura ni rendimiento en un portátil físico. La revisión visual se efectuó a 96 DPI.
+En Windows el proceso propio aplica un Job Object con límite de memoria privada; Linux limita espacio virtual. Estos límites difieren: no todas las páginas mapeadas se incluyen en la memoria privada de Windows. La telemetría separa residencia, pico y memoria privada. Windows, la GUI, Python de comprobaciones y las pestañas consumen memoria adicional. Requiere CPU x64; no promete cualquier Celeron de 32 bits o un equipo cuya RAM está ocupada.
 
-## Regresiones de herramientas
+## Flujo instalado y controles
 
-- HTTP 502 `structured_output_failed`: más espacio para una acción completa, con un máximo de tres intentos y validación del campo `content`.
-- Contexto 4096: reserva de salida, retirada de historial opcional y fragmentos web JSON válidos; se conservan la petición humana y la identidad de la pestaña.
-- HTTP 400 `exceed_context_size_error`: un reintento acotado de inferencia con el contexto comunicado por el servidor. Las acciones ya ejecutadas no se repiten.
-- `write_file` sobre un Python existente: prelectura real antes de pedir la nueva propuesta, conservando el archivo en disco hasta aplicar.
-- Botón **Parar** real en la GUI: cancelación de una petición HTTP bloqueada, terminación de un proceso auxiliar propio, recuperación de Enviar y conservación de propuestas anteriores.
+- Setup real instala y selecciona Strata CPU, pesos y ejecutable verificados, y fuentes editables. No necesita GPU ni Python para inferencia.
+- El agente Windows crea hello.py con el contenido solicitado como propuesta, sin guardarlo antes de Aplicar. La petición humana del arnés aplica el cambio y se comprueba el archivo real.
+- Activar, consultar estado, ajustar ahorro, detener el motor y desactivar ahorro funcionan por la entrada compartida de texto y dictado aceptado. No se afirma reconocimiento de voz dentro de la VM.
+- Rechaza una entrada excesiva antes de generar. La cancelación nativa interrumpe una petición activa en aproximadamente **0,047 s** en el equipo de desarrollo, y después se detiene su proceso propio. Esa latencia no se atribuye al Celeron emulado o físico.
+- Pruebas instaladas de propuestas, protocolo, contexto 4096, recuperación HTTP, botón Parar con transporte controlado, portátiles, catálogo, actualizador y ventanas de 800–1520 px. Los fixtures están separados de las llamadas reales a Strata CPU.
 
-El HTTP y las acciones del modelo de estas regresiones son programados. Se ejecutan las herramientas y la GUI reales, sin cargar modelos candidatos. No equivalen a una prueba de Discord externo ni a una medición de rendimiento de IA.
+## Límites observados
 
-## Skills, documentos, MCP y actualizador
+El modelo 0,6B es básico. La prueba de reemplazar el programa por un saludo con while **no pasó**: produjo propuestas con errores de formato o lógica. No se presenta ese ejemplo ni el XLSX posterior como un éxito de este perfil CPU. Las instrucciones reducidas, prelectura, rechazo de propuestas sin efecto y comprobación de campos evitan algunos fallos de protocolo; no garantizan corrección semántica. Revisar el diff y ejecutar pruebas autorizadas. El motor sí carga, genera y usa herramientas dentro de los límites verificados.
 
-- 55 skills cargadas sin errores; catálogo en el diálogo compartido por texto y dictado aceptado. GUI real con 55 tarjetas, buscador, estado local/MCP y ventana de actualización.
-- DOCX, XLSX, PPTX, PDF, CSV, HTML y SVG: propuesta sin escribir, Aplicar, lectura de contenido y Deshacer. La edición binaria recupera los bytes originales y bloquea sustituciones sin lectura o con edición concurrente.
-- Lectores independientes python-docx, openpyxl, python-pptx y pypdf abrieron los resultados. Se verificaron párrafos, diapositivas, valores numéricos/booleanos y texto que comienza por `=`; PDF validado y rasterizado con PDFium.
-- XML con DTD bloqueado; el agente no puede editar ajustes, conexiones, permisos, cachés o binarios de su instalación.
-- Consulta Git real sobre un repo de prueba, respaldo ZIP con hash y desactivación de skills comprobados en el dispatcher.
-- Automatizaciones: creación, intervalo, proyecto seleccionado, pausa y bloqueo de acciones externas mediante acciones programadas. El disparo por temporizador de la GUI no se dejó funcionando durante un intervalo completo.
-- MCP stdio: proceso propio real, inicialización, descubrimiento, ping, llamada, rechazo sin aprobación, nombres exactos autorizados, skill desactivada y cancelación. HTTP/SSE: transporte con respuestas programadas JSON multilínea, sesión y versión; resultado de herramienta y medio de imagen guardado sin base64 en el contexto.
-- Actualizador: consulta y descarga con HTTP programado, tamaño/SHA-256/digest, rechazo de corrupción y cambios posteriores, ajuste de búsqueda automática y desactivación. El archivo de descarga del fixture nunca se ejecuta.
+La voz neuronal expresiva original RX 580 mantiene sus archivos, perfil e identidad. No se cambió ese backend; en instalaciones sin su paquete figura sin configurar. NuGet no pudo consultar la auditoría de vulnerabilidades (NU1900); la compilación no tuvo errores. El setup no tiene firma Authenticode propia.
 
-Las skills de flujo preparan código y archivos; las de servicios externos requieren un servidor, cuenta y herramientas autorizadas. No se certifican proveedores externos, generación de imágenes, OCR avanzado, Excel en vivo o servicios propietarios de Codex por el resultado de estos fixtures. El setup real actualizado se verificó por separado; no se certifica una actualización futura todavía inexistente.
-
-## Agente instalado con su Strata activo
-
-Se reprodujo el ejercicio de saludos sobre un archivo existente que contenía `for i in range(5): print(882)` en un proyecto de prueba propio. El agente instalado usó `read_file`, `write_file` y `finish`, preparó un programa con `input`, `while` y `print` y conservó el contenido original hasta aplicar la propuesta.
-
-Después de aplicarla únicamente en ese proyecto de pruebas, Python verificó la estructura `while`, las entradas y los saludos con 0, 2 y 5 amigos. Se utilizó el modelo Strata activo del perfil original RTX 2060 SUPER + RX 580. Se verificó también la preparación del backend Ono_Anna en la RX 580; no se repitió síntesis ni reproducción de audio en esta prueba. Las preferencias originales se restauraron exactamente.
-
-El mismo agente instalado cargó la skill `spreadsheets` y eligió `artifact_propose` para preparar `gastos.xlsx`, con hoja Gastos y valores Concepto/Importe/Luz/30. El archivo permaneció sin escribir hasta aplicar la propuesta en el proyecto de prueba. La lectura del documento confirmó los datos almacenados. Se ejecutó únicamente el Strata activo, sin candidatos alternativos.
-
-## Reproducir comprobaciones
-
-Después de compilar, sobre una instalación de pruebas propia:
-
-```powershell
-$env:SHEEPCODE_HOME = 'D:\SheepCode-pruebas'
-.\app\bin\Release\net8.0-windows\SheepCode.exe --self-test
-.\app\bin\Release\net8.0-windows\SheepCode.exe --protocol-check
-.\app\bin\Release\net8.0-windows\SheepCode.exe --workflow-check
-.\app\bin\Release\net8.0-windows\SheepCode.exe --catalog-check
-.\app\bin\Release\net8.0-windows\SheepCode.exe --integrations-ui-check
-.\app\bin\Release\net8.0-windows\SheepCode.exe --laptop-check
-.\app\bin\Release\net8.0-windows\SheepCode.exe --laptop-ui-check
-```
-
-`--preflight-agent-check` usa el motor activo configurado, prepara y aplica cambios únicamente en un proyecto de prueba propio y comprueba Python y el XLSX. Requiere el modelo y Python instalados. No lo uses para comparar candidatos. `--update-check` consulta la release pública real, sin descargar ni instalar. `packaging/verify-artifacts.py` valida los archivos de `--catalog-check` con lectores independientes; esas librerías son herramientas de validación, no dependencias del generador local.
-
-## Límites de esta entrega
-
-Windows 10/11 x64 Intel/AMD. Sin certificación de todos los escalados o controladores. Las instalaciones nuevas no incluyen el paquete neuronal de voz RX 580 original. La consulta de auditoría de vulnerabilidades de NuGet devolvió NU1900 por falta de acceso al servicio; no se declara superada. El ejecutable del setup no tiene firma Authenticode propia.
+La validación 0.3.0 queda archivada en VALIDACION-0.3.0.md; su éxito con el modelo grande no se atribuye al modelo pequeño.

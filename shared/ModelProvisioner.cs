@@ -68,6 +68,30 @@ internal static class ModelProvisioner
             }
             else profile = current;
         }
+        else if (plan.Kind == "strata-cpu")
+        {
+            var model = plan.Model ?? throw new InvalidOperationException("Falta el modelo pequeño del catálogo.");
+            if (model.Id != "qwen3-0.6b") throw new InvalidOperationException("Modelo fuera del perfil Strata de 4 GB.");
+            var modelPath = SafeFiles.Child(modelFolder, Path.Combine(model.Id, model.File));
+            using var downloader = new VerifiedDownloader(); await downloader.DownloadAsync(model.Url, modelPath, model.Size, model.Sha256, progress, token);
+            using var metadata = JsonDocument.Parse(typeof(ModelProvisioner).Assembly.GetManifestResourceStream("SheepCode.strata-cpu.json") ?? throw new IOException("Falta el catálogo del motor Strata CPU."));
+            var package = Path.Combine(packages, "strata-cpu.zip");
+            using (var zip = File.OpenRead(package))
+            {
+                var hash = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(zip, token));
+                if (!hash.Equals(metadata.RootElement.GetProperty("sha256").GetString(), StringComparison.OrdinalIgnoreCase)) throw new IOException("El paquete de Strata CPU no coincide con SHA-256.");
+            }
+            var runtime = SafeFiles.Child(root, @"runtime\strata-cpu");
+            progress?.Report(new("Preparando Strata CPU", "Motor nativo x64/SSE2 · sin Python · memoria limitada"));
+            SafeFiles.ExtractZip(package, runtime, token);
+            var executable = Path.Combine(runtime, "strata-cpu.exe");
+            using (var binary = File.OpenRead(executable))
+                if (!Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(binary, token)).Equals(metadata.RootElement.GetProperty("executableSha256").GetString(), StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("El ejecutable de Strata CPU no coincide con SHA-256.");
+            profile = new() { Kind = "strata-cpu", ModelId = model.Id, Label = plan.Label, Executable = Path.GetRelativePath(root, executable), ModelFile = modelPath,
+                DeviceDescription = "CPU x64/SSE2 · compatible sin AVX · presupuesto 1536 MiB", Context = 4096, Threads = Math.Clamp(hardware.Threads, 1, 2),
+                MemoryMiB = 1536, Port = current.Configured ? current.Port : AvailablePort() };
+        }
         else if (plan.Kind == "llama")
         {
             var model = plan.Model ?? throw new InvalidOperationException("Falta el modelo del catálogo.");
