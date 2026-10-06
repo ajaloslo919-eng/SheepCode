@@ -15,8 +15,10 @@ internal static class CatalogDiagnostics
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested(); var hash = AppPaths.Hash(Bytes); var uri = request.RequestUri!;
-            string Asset(string name) => "https://github.com/" + UpdateManager.Repository + "/releases/download/v0.4.0/" + name;
-            var text = uri.Host == "api.github.com" ? JsonSerializer.Serialize(new { tag_name = "v0.4.0", draft = false, prerelease = false, assets = new[] { new { name = "SheepCode-Setup.exe", size = Bytes.Length, browser_download_url = Asset("SheepCode-Setup.exe"), digest = "sha256:" + (wrongDigest ? new string('0', 64) : hash) }, new { name = "SHA256SUMS.txt", size = 100, browser_download_url = Asset("SHA256SUMS.txt"), digest = "" } } }) : hash + "  SheepCode-Setup.exe\n";
+            var installed = Version.Parse(UpdateManager.CurrentVersion);
+            var futureTag = "v" + new Version(installed.Major, installed.Minor + 1, 0);
+            string Asset(string name) => "https://github.com/" + UpdateManager.Repository + "/releases/download/" + futureTag + "/" + name;
+            var text = uri.Host == "api.github.com" ? JsonSerializer.Serialize(new { tag_name = futureTag, draft = false, prerelease = false, assets = new[] { new { name = "SheepCode-Setup.exe", size = Bytes.Length, browser_download_url = Asset("SheepCode-Setup.exe"), digest = "sha256:" + (wrongDigest ? new string('0', 64) : hash) }, new { name = "SHA256SUMS.txt", size = 100, browser_download_url = Asset("SHA256SUMS.txt"), digest = "" } } }) : hash + "  SheepCode-Setup.exe\n";
             HttpContent content = uri.AbsolutePath.EndsWith(".exe") ? new ByteArrayContent(corrupt ? Enumerable.Repeat((byte)'x', Bytes.Length).ToArray() : Bytes) : new StringContent(text);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
         }
