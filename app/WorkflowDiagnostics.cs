@@ -1,3 +1,4 @@
+using SheepCode.Distribution;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -55,7 +56,9 @@ internal static class WorkflowDiagnostics
     }
     private static async Task CheckContextAsync(List<object> rows)
     {
-        using var gateway = new ContextGateway(); using var http = new HttpClient(gateway); await using var voice = new NeuralVoice(); await using var engine = new EngineHost(voice, http);
+        using var gateway = new ContextGateway(); using var http = new HttpClient(gateway); await using var voice = new NeuralVoice();
+        var profile = new RuntimeProfile { Kind = "llama", Label = "Fixture HTTP/tokenizador sin modelo", Context = 4096, Threads = 2, RequireRx580Voice = false };
+        await using var engine = new EngineHost(voice, http, transportProfile: profile);
         var agent = new AgentController(engine, voice, Preferences.Load()); var system = agent.BuildSystemPrompt("abre la pestaña de discord", out _, 4096);
         var human = "Petición humana: quiero que me abras la pestaña de discord";
         var page = new BrowserView("a7e3f723", "https://discord.com/", "Discord", string.Concat(Enumerable.Repeat("Página larga con emojis 🐑, enlaces y texto. ", 200)),

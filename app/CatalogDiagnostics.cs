@@ -83,10 +83,12 @@ internal static class CatalogDiagnostics
         var agent = new AgentController(engine, voice, prefs, (messages, _, token) => { token.ThrowIfCancellationRequested(); return Task.FromResult(fixtureQueue.Count > 0 ? fixtureQueue.Dequeue() : "{\"action\":\"finish\",\"message\":\"Fixture completada.\"}"); }, updates);
         try
         {
-            Assert(agent.Skills.Items.Count >= 55 && agent.Skills.Errors.Count == 0, "El catálogo no carga todas las skills.");
-            Assert(agent.Skills.State("imagegen").Contains("sin configurar"), "Una skill externa afirmó estar disponible sin proveedor.");
+            Assert(agent.Skills.Items.Count >= 57 && agent.Skills.Errors.Count == 0, "El catálogo no carga todas las skills.");
+            Assert(agent.Skills.Get("imagegen").Backend == "imagegen", "La generación local fue registrada como proveedor externo.");
+            var providerSkill = agent.Skills.Items.First(s => s.Backend == "mcp" && s.Name != "connectors").Name;
+            Assert(agent.Skills.State(providerSkill).Contains("sin configurar"), "Una skill externa afirmó estar disponible sin proveedor.");
             Assert((await agent.ControlAsync("Lista las skills", CancellationToken.None))!.Contains("documents"), "El diálogo no conoce las skills.");
-            Pass("55-skills-loaded-and-visible-to-dialogue-with-honest-provider-state", agent.Skills.Items.Count);
+            Pass("57-skills-loaded-and-visible-with-local-generation-and-honest-provider-state", agent.Skills.Items.Count);
             agent.OpenProject(root);
             var samples = new Dictionary<string, (string Skill, string Content)> {
                 ["docx"] = ("documents", "{\"title\":\"Sheep y Kuky\",\"paragraphs\":[\"Hola, María.\",\"Documento editable.\"]}"),

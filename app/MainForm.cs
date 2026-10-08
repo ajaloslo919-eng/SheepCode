@@ -20,7 +20,8 @@ internal sealed partial class MainForm : Form
     private readonly ListBox _changeList = new();
     private readonly ComboBox _checkList = new(), _reasoning = new(), _emotion = new();
     private readonly CheckBox _allowChecks = new() { Text = "Comprobaciones", AutoSize = true }, _readAloud = new() { Text = "Leer respuestas", AutoSize = true };
-    private readonly CheckBox _fastCpu = new() { Text = "⚡ Qwen rápido", AutoSize = true };
+    private readonly CheckBox _fastCpu = new() { Text = "⚡ CPU rápido", AutoSize = true };
+    private readonly CheckBox _reviewCode = new() { Text = "🛡️ Revisar código", AutoSize = true };
     private readonly Button _send = ButtonFor("🐑 Enviar", true), _stop = ButtonFor("⏸ Parar"), _mic = ButtonFor("🎙 Dictar"),
         _open = ButtonFor("📂 Proyecto"), _connect = ButtonFor("✨ Iniciar IA"), _save = ButtonFor("💾 Guardar"),
         _apply = ButtonFor("✓ Aplicar", true), _reject = ButtonFor("Rechazar"), _undo = ButtonFor("↶ Deshacer"), _runCheck = ButtonFor("▶ Ejecutar");
@@ -46,7 +47,7 @@ internal sealed partial class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen; BackColor = Background; ForeColor = Foreground;
         Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
         Font = new("Segoe UI", 10); AutoScaleMode = AutoScaleMode.Dpi;
-        BuildLayout(); BuildWorkbench(); WireEvents(); RefreshSettings();
+        BuildLayout(); BuildWorkbench(); BuildImagesPanel(); BuildScenesPanel(); BuildGenerationPanel(); WireEvents(); RefreshSettings();
         Resize += (_, _) => UpdateResponsiveLayout(); Shown += (_, _) => { var visibleScreen = Screen.FromControl(this).WorkingArea; Size = new(Math.Min(Width, visibleScreen.Width - 20), Math.Min(Height, visibleScreen.Height - 20)); UpdateResponsiveLayout(); }; UpdateResponsiveLayout();
         AppendChat("assistant", "🐑 ¡Hola! Sheep está listo para crear contigo y Kuky nos acompaña 🌸\n\nAbre un proyecto, prueba una skill o dime qué quieres investigar. Puedes hablarme con el micrófono y revisar el texto antes de enviarlo.");
         if (Directory.Exists(preferences.LastProject))
@@ -105,7 +106,7 @@ internal sealed partial class MainForm : Form
         _tabs.Dock = DockStyle.Fill; _tabs.Font = new("Segoe UI", 10); _tabs.BackColor = Background;
         center.Controls.Add(_tabs, 0, 2);
         var navigation = _navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new(4), WrapContents = true, AutoScroll = true, BackColor = Surface };
-        var names = new[] { "🐑 Código", "🌸 Cambios", "▶ Consola", "🧩 Skills", "💻 PC", "🌐 Web", "🧠 Modelos", "🌿 Archivos" };
+        var names = new[] { "🐑 Código", "🌸 Cambios", "▶ Consola", "🧩 Skills", "💻 PC", "🌐 Web", "🧠 Modelos", "🌿 Archivos", "🖼️ Imágenes", "🧊 3D", "🎨 Crear" };
         for (var i = 0; i < names.Length; i++) { var index = i; var button = ButtonFor(names[i]); button.Click += (_, _) => _tabs.SelectedIndex = index; navigation.Controls.Add(button); }
         _tabs.SelectedIndexChanged += (_, _) => { for (var i = 0; i < navigation.Controls.Count; i++) { var button = navigation.Controls[i]; button.BackColor = i == _tabs.SelectedIndex ? Accent : Surface; button.ForeColor = i == _tabs.SelectedIndex ? Background : Foreground; button.Invalidate(); } };
         center.Controls.Add(navigation, 0, 1);
@@ -121,7 +122,7 @@ internal sealed partial class MainForm : Form
         consoleLayout.Controls.Add(Flow(_checkList, _runCheck), 0, 0); consoleLayout.Controls.Add(_console, 0, 1); consoleTab.Controls.Add(consoleLayout); _tabs.TabPages.Add(consoleTab);
         columns.Controls.Add(center, 1, 0);
 
-        var conversation = Stack(44, -1, 88, 90, 50); conversation.Padding = new(6);
+        var conversation = _conversation = Stack(44, -1, 108, 0, 90, 50); conversation.Padding = new(6);
         var agentTitle = LabelFor("  🐑 CONVERSA CON SHEEP  ✨", 10); conversation.Controls.Add(agentTitle, 0, 0);
         _chat.Font = new("Segoe UI", 10); _chat.WordWrap = true; _chat.BackColor = Surface; _chat.ScrollBars = RichTextBoxScrollBars.Vertical; conversation.Controls.Add(_chat, 0, 1);
         var options = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new(3), WrapContents = true };
@@ -130,14 +131,20 @@ internal sealed partial class MainForm : Form
         foreach (var emotion in _voice.Emotions) _emotion.Items.Add(emotion);
         foreach (var combo in new[] { _reasoning, _emotion, _checkList })
         { combo.BackColor = Background; combo.ForeColor = Foreground; combo.FlatStyle = FlatStyle.Flat; StyleCombo(combo); }
-        options.Controls.AddRange([_allowChecks, _readAloud, _reasoning, _fastCpu, _emotion]); conversation.Controls.Add(options, 0, 2);
+        options.Controls.AddRange([_reviewCode, _allowChecks, _readAloud, _reasoning, _fastCpu, _emotion]); conversation.Controls.Add(options, 0, 2);
         _input.Dock = DockStyle.Fill; _input.BackColor = Background; _input.ForeColor = Foreground; _input.BorderStyle = BorderStyle.FixedSingle;
-        _input.Font = new("Segoe UI", 11); _input.PlaceholderText = "¿Qué creamos hoy? 🌸 Usa $browser, $desktop…\r\nCtrl + Enter para enviar"; conversation.Controls.Add(_input, 0, 3);
-        var composerButtons = Flow(_send, _mic, _stop); conversation.Controls.Add(composerButtons, 0, 4); columns.Controls.Add(conversation, 2, 0);
+        conversation.Controls.Add(_imageTray, 0, 3);
+        _input.Font = new("Segoe UI", 11); _input.PlaceholderText = "¿Qué creamos hoy? 🌸\r\nCtrl+V pega capturas · Ctrl+Enter envía"; conversation.Controls.Add(_input, 0, 4);
+        var composerButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new(2), BackColor = Surface };
+        foreach (var width in new[] { 31, 14, 27, 28 }) composerButtons.ColumnStyles.Add(new(SizeType.Percent, width));
+        var buttons = new[] { _send, _attachImage, _mic, _stop };
+        for (var i = 0; i < buttons.Length; i++) { buttons[i].AutoSize = false; buttons[i].Dock = DockStyle.Fill; buttons[i].Padding = new(1); buttons[i].Font = new("Segoe UI", 9); composerButtons.Controls.Add(buttons[i], i, 0); }
+        conversation.Controls.Add(composerButtons, 0, 5); columns.Controls.Add(conversation, 2, 0);
         root.Controls.Add(_status, 0, 3);
         var tip = new ToolTip(); tip.SetToolTip(_allowChecks, "Permite al agente ejecutar las comprobaciones detectadas. Estas ejecutan código del proyecto abierto.");
         tip.SetToolTip(_readAloud, "Lee el resumen de la respuesta con la voz neuronal de Ono_Anna en la RX 580.");
-        tip.SetToolTip(_fastCpu, "Qwen3-0.6B: instrucciones breves, skills a demanda y prelectura del archivo abierto. Mantiene permisos y propuestas para revisar. También: Activa/Desactiva el modo rápido.");
+        tip.SetToolTip(_fastCpu, "Modelos pequeños Qwen o Granite en Strata CPU: instrucciones breves, skills a demanda y prelectura del archivo abierto. Mantiene permisos y propuestas para revisar. También: Activa/Desactiva el modo rápido.");
+        tip.SetToolTip(_reviewCode, "Revisa la sintaxis y requisitos explícitos como while antes del diff, con cualquier modelo. Devuelve errores al modelo para corregirlos, sin ejecutar el código. También: Activa/Desactiva la revisión de código.");
         tip.SetToolTip(_mic, "Pulsa para grabar y vuelve a pulsar para transcribir. Puedes revisar el texto antes de enviarlo.");
         tip.SetToolTip(_connect, "Carga el modelo local elegido por el setup. El perfil original conserva Strata, sus dos GPU y la voz RX 580.");
     }
@@ -188,6 +195,7 @@ internal sealed partial class MainForm : Form
         };
         _allowChecks.CheckedChanged += (_, _) => SaveSettings(); _readAloud.CheckedChanged += (_, _) => SaveSettings();
         _fastCpu.CheckedChanged += (_, _) => SaveSettings();
+        _reviewCode.CheckedChanged += (_, _) => SaveSettings();
         _reasoning.SelectedIndexChanged += (_, _) => SaveSettings(); _emotion.SelectedIndexChanged += (_, _) => SaveSettings();
         _agent.ProjectChanged += () => Ui(RefreshProject);
         _agent.ChangeProposed += change => Ui(() => { RefreshChanges(change.Id); if (change.Status == "pending") _tabs.SelectedIndex = 1; });
@@ -210,7 +218,7 @@ internal sealed partial class MainForm : Form
             _taskCancellation?.Cancel(); _backgroundCancellation.Cancel(); _agent.Connections.Cancel(); _modelTimer.Stop(); _voice.Interrupt(); _dictation.Dispose();
             await _engine.StopAsync(CancellationToken.None);
             if (_running is not null) try { await _running; } catch (Exception) { }
-            await _engine.DisposeAsync(); await _voice.DisposeAsync(); _agent.Connections.Dispose(); _agent.Updates.Dispose(); _browserTools.Dispose(); _highlight.Dispose(); _modelTimer.Dispose(); Close();
+            await _engine.DisposeAsync(); await _voice.DisposeAsync(); _agent.Images.Dispose(); _agent.Vision.Dispose(); _agent.Scenes.Dispose(); _agent.ImageGenerator.Dispose(); _imagePreview.Image?.Dispose(); _scenePreview.Image?.Dispose(); _generatedPreview.Image?.Dispose(); _agent.Connections.Dispose(); _agent.Updates.Dispose(); _browserTools.Dispose(); _highlight.Dispose(); _modelTimer.Dispose(); Close();
         };
     }
     private void RefreshSettings()
@@ -218,13 +226,19 @@ internal sealed partial class MainForm : Form
         _refreshingSettings = true;
         _allowChecks.Checked = _preferences.AllowChecks; _readAloud.Checked = _preferences.ReadAloud;
         _readAloud.Enabled = File.Exists(Path.Combine(AppPaths.State, "tts-config.json")) && File.Exists(AppPaths.VoicePython);
+        _readAloud.Visible = _readAloud.Enabled; _emotion.Visible = _readAloud.Enabled && _readAloud.Checked;
         _reasoning.Enabled = _engine.Profile.Kind != "strata-cpu";
         _reasoning.Visible = _reasoning.Enabled; _fastCpu.Visible = !_reasoning.Enabled;
         _fastCpu.Enabled = _agent.Skills.Enabled("models"); _fastCpu.Checked = _preferences.FastCpuMode;
+        _reviewCode.Enabled = _agent.Skills.Enabled("code"); _reviewCode.Checked = _preferences.ValidateCode;
         _reasoning.SelectedIndex = _reasoning.Enabled ? Array.IndexOf(new[] { "none", "low", "medium", "high" }, _preferences.Reasoning) : 0;
         _emotion.SelectedItem = _preferences.Emotion; if (_emotion.SelectedIndex < 0) _emotion.SelectedItem = "neutral";
         _powerMode.SelectedIndex = Array.IndexOf(new[] { "auto", "eco", "performance" }, _preferences.PortableMode);
         _refreshingSettings = false;
+        RefreshImagesPanel();
+        RefreshScenesPanel();
+        RefreshGenerationPanel();
+        UpdateResponsiveLayout();
     }
     private void SaveSettings()
     {
@@ -232,8 +246,10 @@ internal sealed partial class MainForm : Form
         _preferences.AllowChecks = _allowChecks.Checked; _preferences.ReadAloud = _readAloud.Checked;
         if (_reasoning.Enabled) _preferences.Reasoning = new[] { "none", "low", "medium", "high" }[Math.Max(0, _reasoning.SelectedIndex)];
         if (_fastCpu.Visible && _fastCpu.Enabled) _preferences.FastCpuMode = _fastCpu.Checked;
+        if (_reviewCode.Enabled) _preferences.ValidateCode = _reviewCode.Checked;
         _preferences.Emotion = _emotion.SelectedItem as string ?? "neutral"; _preferences.Save();
         if (!_preferences.ReadAloud) _voice.Interrupt();
+        _emotion.Visible = _readAloud.Enabled && _readAloud.Checked; UpdateResponsiveLayout();
     }
     private void UpdateResponsiveLayout()
     {
@@ -252,6 +268,11 @@ internal sealed partial class MainForm : Form
         _headerLayout.ColumnStyles[2].Width = compact ? 0 : (float)(330 * scale); _gpu.Visible = !compact;
         _rootLayout.RowStyles[0].Height = (float)((ClientSize.Height < 720 * scale ? 88 : 110) * scale);
         _rootLayout.RowStyles[1].Height = (float)(52 * scale);
+        var shortWindow = ClientSize.Height < 680 * scale;
+        _conversation.RowStyles[0].Height = (float)((shortWindow ? 32 : 44) * scale);
+        _conversation.RowStyles[2].Height = (float)((shortWindow ? (_readAloud.Checked && _readAloud.Enabled ? 108 : _readAloud.Enabled ? 88 : 64) : 108) * scale);
+        _conversation.RowStyles[4].Height = (float)((shortWindow ? 82 : 90) * scale);
+        _conversation.RowStyles[5].Height = (float)((shortWindow ? 46 : 50) * scale);
         var used = _toolbar.Controls.Cast<Control>().Where(c => c != _projectLabel).Sum(c => c.Width + c.Margin.Horizontal);
         _projectLabel.Width = Math.Max(90, _toolbar.ClientSize.Width - used - (int)(45 * scale));
         _rootLayout.ResumeLayout(); _columns.ResumeLayout();
@@ -259,9 +280,13 @@ internal sealed partial class MainForm : Form
     internal object ResponsiveSnapshot() => new { size = new { Width, Height }, dpi = DeviceDpi, compact = _compact,
         fileExplorerInTab = _tree.Parent == _compactFiles,
         inputVisible = _input.Visible && ClientRectangle.Contains(RectangleToClient(_input.RectangleToScreen(_input.ClientRectangle))),
-        sendVisible = _send.Visible && ClientRectangle.Contains(RectangleToClient(_send.RectangleToScreen(_send.ClientRectangle))) };
+        sendVisible = _send.Visible && ClientRectangle.Contains(RectangleToClient(_send.RectangleToScreen(_send.ClientRectangle))),
+        chatHeight = _chat.Height,
+        codeReviewVisible = _reviewCode.Visible && _reviewCode.Parent!.ClientRectangle.Contains(_reviewCode.Bounds) && ClientRectangle.Contains(RectangleToClient(_reviewCode.RectangleToScreen(_reviewCode.ClientRectangle))),
+        codeReviewEnabled = _reviewCode.Enabled, codeReviewChecked = _reviewCode.Checked };
     private void RefreshProject()
     {
+        _previewProjectImage = null; _projectScene = null; _sceneLastPath = ""; _sceneLastText = ""; RefreshImagesPanel(); RefreshScenesPanel();
         var workspace = _agent.Workspace!; _projectLabel.Text = workspace.Root;
         _tree.BeginUpdate(); _tree.Nodes.Clear();
         foreach (var file in workspace.Files())
@@ -285,6 +310,8 @@ internal sealed partial class MainForm : Form
     }
     internal void OpenFile(string path)
     {
+        if (ImageTools.IsImage(path)) { OpenProjectImage(path); return; }
+        if (SceneTools.IsScene(path)) { OpenProjectScene(path); return; }
         if (Path.GetExtension(path).ToLowerInvariant() is ".docx" or ".xlsx" or ".pptx" or ".pdf")
         {
             _loadingEditor = true;
@@ -328,7 +355,9 @@ internal sealed partial class MainForm : Form
     private void ShowSelectedChange()
     {
         var change = (_changeList.SelectedItem as ChangeRow)?.Change;
-        _diff.Text = change?.Diff() ?? ""; _changeInfo.Text = change?.Reason ?? "Los cambios del agente aparecen aquí para revisión.";
+        _diff.Text = change is null ? "" : (change.Validation is null ? "🛡️ Esta propuesta no tiene una revisión automática registrada.\n\n" : change.Validation.Summary + "\n" + change.Validation.Scope + "\n" + string.Join(" · ", change.Validation.Checks) + "\n" +
+            string.Join("\n", change.Validation.Diagnostics.Select(d => $"{d.Severity} · línea {d.Line}: {d.Message}")) + "\n\n") + change.Diff();
+        _changeInfo.Text = change?.Reason ?? "Los cambios del agente aparecen aquí para revisión.";
         var offset = 0;
         foreach (var line in _diff.Lines)
         {
@@ -353,8 +382,8 @@ internal sealed partial class MainForm : Form
     }
     private void SendInput()
     {
-        if (_running is { IsCompleted: false } || string.IsNullOrWhiteSpace(_input.Text)) return;
-        var text = _input.Text.Trim(); _input.Clear();
+        if (_running is { IsCompleted: false } || string.IsNullOrWhiteSpace(_input.Text) && _agent.Images.Pending.Count == 0 && _agent.Scenes.Pending.Count == 0) return;
+        var text = string.IsNullOrWhiteSpace(_input.Text) ? _agent.Scenes.Pending.Count > 0 ? "Inspecciona las escenas adjuntas." : _agent.Vision.Enabled && _agent.Vision.Configured ? "Describe las imágenes adjuntas." : "Lee el texto de las imágenes adjuntas." : _input.Text.Trim(); _input.Clear();
         StartTask(async token =>
         {
             var reply = await _agent.SubmitAsync(text, token);
@@ -391,6 +420,8 @@ internal sealed partial class MainForm : Form
             var cancellation = _taskCancellation;
             var cancelling = cancellation?.CancelAsync();
             _agent.Connections.Cancel();
+            _agent.Images.Cancel(); _agent.Vision.Cancel(); _agent.Scenes.Cancel();
+            _agent.ImageGenerator.Cancel();
             _voice.Interrupt();
             await _engine.StopAsync(CancellationToken.None);
             if (cancelling is not null) await cancelling;
@@ -406,6 +437,9 @@ internal sealed partial class MainForm : Form
         _busy = value;
         _send.Enabled = _open.Enabled = _connect.Enabled = _runCheck.Enabled = _save.Enabled = _mic.Enabled = !value;
         _apply.Enabled = _reject.Enabled = _undo.Enabled = !value;
+        RefreshImagesPanel();
+        RefreshScenesPanel();
+        RefreshGenerationPanel();
     }
     private void AppendChat(string role, string text)
     {

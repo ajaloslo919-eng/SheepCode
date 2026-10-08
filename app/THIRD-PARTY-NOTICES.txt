@@ -1,5 +1,23 @@
 MIT License
 
+Optional local visual components:
+- SmolVLM-500M-Instruct (Hugging Face) / GGUF by ggml-org: Apache-2.0,
+  see licenses/SmolVLM-Apache-2.0.txt and shared/vision-model.json.
+- SD-Turbo (Stability AI) / GGUF quantization by Green-Sky: Stability AI
+  Community License, see licenses/SD-Turbo-Community.md and the pinned catalog.
+  Weights are downloaded separately; this code's MIT license does not cover them.
+- stable-diffusion.cpp: MIT, see licenses/SD-cpp-MIT.txt.
+- Blender is invoked only if installed by the user; it is not redistributed.
+
+Additional code-validation components distributed with SheepCode:
+- CPython 3.12.10 embeddable x64: PSF license; see licenses/Python-3.12-PSF.txt
+  and runtime/code-validation/python/LICENSE.txt.
+- Microsoft.CodeAnalysis.CSharp 4.14.0 (Roslyn): MIT; see
+  licenses/Roslyn-MIT.txt and licenses/Roslyn-ThirdPartyNotices.rtf.
+- Esprima .NET 3.0.6: BSD-3-Clause; see licenses/Esprima-BSD.txt.
+
+The following notice applies to the upstream Strata components:
+
 Copyright (c) 2026 Niko1221 and the Strata contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

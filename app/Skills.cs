@@ -10,7 +10,7 @@ internal sealed class SkillRegistry(Preferences preferences)
     internal List<string> Errors { get; } = [];
     internal event Action? Changed;
     internal Func<string, string>? ExternalState { get; set; }
-    internal static string Resolve(string name) => name.ToLowerInvariant() switch { "codigo" or "código" => "code", "pc" or "escritorio" => "desktop", "navegador" or "navegación" or "web" => "browser", "modelos" or "modelo" => "models", _ => name.ToLowerInvariant() };
+    internal static string Resolve(string name) => name.ToLowerInvariant() switch { "codigo" or "código" => "code", "pc" or "escritorio" => "desktop", "navegador" or "navegación" or "web" => "browser", "modelos" or "modelo" => "models", "imagen" or "imágenes" or "imagenes" => "images", _ => name.ToLowerInvariant() };
     internal void Reload()
     {
         Items.Clear(); Errors.Clear();
@@ -44,7 +44,7 @@ internal sealed class SkillRegistry(Preferences preferences)
         var name = Field("name"); var description = Field("description");
         if (!Regex.IsMatch(name, @"\A[a-z][a-z0-9-]{0,63}\z") || description.Length is < 1 or > 800 || description is "|" or ">") throw new InvalidDataException("name en minúsculas y description en una línea.");
         var backend = Field("backend"); if (backend.Length == 0) backend = name is "code" or "desktop" or "browser" or "models" ? name : "workflow";
-        if (backend is not ("code" or "desktop" or "browser" or "models" or "workflow" or "artifacts" or "git" or "backup" or "automations" or "mcp" or "updater")) throw new InvalidDataException("Backend de skill no registrado.");
+        if (backend is not ("code" or "desktop" or "browser" or "models" or "images" or "scenes" or "imagegen" or "workflow" or "artifacts" or "git" or "backup" or "automations" or "mcp" or "updater")) throw new InvalidDataException("Backend de skill no registrado.");
         var emoji = Field("emoji"); if (emoji.Length == 0) emoji = name switch { "code" => "🐑", "desktop" => "💻", "browser" => "🌐", "models" => "🧠", _ => "🌸" };
         return new(name, description, match.Groups[2].Value.Trim(), path, emoji, backend, Field("triggers"));
     }
@@ -52,6 +52,9 @@ internal sealed class SkillRegistry(Preferences preferences)
     {
         var skill = Get(name); if (!Enabled(name)) return "desactivada";
         if (name == "connectors") return "disponible · cliente MCP; configura proveedores";
+        if (name == "images") return "disponible · adjuntos/OCR; visión necesita componente local instalado y activo";
+        if (name == "scenes") return "disponible · Unity YAML; FBX/BLEND necesitan Blender";
+        if (name == "imagegen") return "disponible · generación local requiere instalar SD-Turbo; guardar PNG es humano";
         if (skill.Backend is "desktop" or "browser" or "models" && !Enabled(skill.Backend)) return "desactivada · necesita " + skill.Backend;
         if (skill.Backend == "mcp") return ExternalState?.Invoke(skill.Name) ?? "sin configurar · necesita conexión MCP";
         if (skill.Backend == "git" && AppPaths.ToolExecutable("git.exe") is null) return "sin configurar · necesita Git";
@@ -83,6 +86,7 @@ internal sealed class SkillRegistry(Preferences preferences)
         if (Regex.IsMatch(canonical, @"código|archivo|función|corrige|proyecto|bug|refactor")) names.Add("code");
         foreach (var skill in Items.Where(s => s.Triggers.Length > 0))
             if (skill.Triggers.Split('|').Any(t => canonical.Contains(t, StringComparison.OrdinalIgnoreCase))) names.Insert(0, skill.Name);
+        if (AgentController.HumanRequestsImage(input)) names.Insert(0, "imagegen");
         return names.Distinct().Where(Enabled).Take(3).ToArray();
     }
     internal string Create(string name, string description, string instructions)

@@ -8,7 +8,7 @@ internal sealed class ProjectWorkspace
 {
     internal string Root { get; }
     private static readonly HashSet<string> Ignored = new(StringComparer.OrdinalIgnoreCase)
-        { ".git", ".svn", "node_modules", "bin", "obj", "dist", "build", "vendor", ".venv", "venv", "__pycache__", ".idea", ".vs", ".aws", ".ssh" };
+        { ".git", ".svn", "node_modules", "bin", "obj", "dist", "build", "vendor", ".venv", "venv", "__pycache__", ".idea", ".vs", ".aws", ".ssh", "Library", "Temp", "UserSettings", "Logs" };
     private static bool Secret(string name) => name.StartsWith(".env", StringComparison.OrdinalIgnoreCase) ||
         name.EndsWith(".pem", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".pfx", StringComparison.OrdinalIgnoreCase) ||
         name.EndsWith(".key", StringComparison.OrdinalIgnoreCase) || name.Contains("api_key", StringComparison.OrdinalIgnoreCase) ||
@@ -145,6 +145,7 @@ internal sealed class ProposedChange
     public string? ArtifactFormat { get; set; }
     public string? BeforeBinary { get; set; }
     public string? AfterBinary { get; set; }
+    public CodeValidation? Validation { get; set; }
     internal void Save() => AppPaths.SaveJson(System.IO.Path.Combine(AppPaths.Changes, Id + ".json"), this);
     internal string Diff()
     {
@@ -179,18 +180,38 @@ internal sealed class ChangeStore
         }
     }
     internal ProposedChange Propose(string path, string content, string reason)
+        => ProposeCore(path, content, reason, null, null, false);
+    internal ProposedChange ProposeValidated(string path, string content, string reason, string? expectedHash, CodeValidation validation)
+    {
+        if (!validation.CanPropose || validation.Path != path || validation.ContentHash != AppPaths.HashText(content))
+            throw new InvalidOperationException("La revisión no corresponde al contenido propuesto.");
+        return ProposeCore(path, content, reason, expectedHash, validation, true);
+    }
+    private ProposedChange ProposeCore(string path, string content, string reason, string? expectedHash, CodeValidation? validation, bool compareHash)
     {
         FileText? before = File.Exists(_workspace.Resolve(path)) ? _workspace.Read(path) : null;
+        if (compareHash && (expectedHash is null ? before is not null : before?.Hash != expectedHash))
+            throw new IOException("El archivo cambió durante la revisión automática. Lee su versión actual antes de volver a proponerlo.");
         if (content == before?.Text) throw new InvalidOperationException("La propuesta no cambia el archivo.");
         if (Encoding.UTF8.GetByteCount(content) > 256 * 1024) throw new InvalidOperationException("La propuesta supera los 256 KiB.");
+        // Repeated tool output must not replace a reviewed proposal or create a
+        // new ID. Only reuse a report for the same current file and exact source.
+        if (validation is not null && Items.LastOrDefault(c => c.Status == "pending" && c.Path.Equals(path, StringComparison.OrdinalIgnoreCase) &&
+            c.ArtifactFormat is null && c.BeforeHash == before?.Hash && c.After == content && c.Validation?.Status == validation.Status &&
+            c.Validation.ContentHash == validation.ContentHash) is { } identical)
+        {
+            identical.Validation = validation; identical.Save(); return identical;
+        }
         foreach (var old in Items.Where(c => c.Path.Equals(path, StringComparison.OrdinalIgnoreCase) && c.Status == "pending")) { old.Status = "superseded"; old.Save(); }
         var item = new ProposedChange { Project = _workspace.Root, Path = path, Before = before?.Text ?? "", After = content,
-            BeforeHash = before?.Hash, Bom = before?.Bom ?? false, Newline = before?.Newline ?? "\n", Reason = reason };
+            BeforeHash = before?.Hash, Bom = before?.Bom ?? false, Newline = before?.Newline ?? "\n", Reason = reason, Validation = validation };
         item.Save(); Items.Add(item); Changed?.Invoke(item); return item;
     }
     internal ProposedChange Get(string id) => Items.FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException("No existe ese cambio en el proyecto abierto.");
-    internal ProposedChange ProposeArtifact(string path, string format, string content, string reason, string? expectedHash = null)
+    internal ProposedChange ProposeArtifact(string path, string format, string content, string reason, string? expectedHash = null, CodeValidation? validation = null)
     {
+        if (validation is not null && (!validation.CanPropose || validation.Path != path || validation.ContentHash != AppPaths.HashText(content)))
+            throw new InvalidOperationException("La revisión no corresponde al artefacto propuesto.");
         if (Path.GetExtension(path).TrimStart('.').ToLowerInvariant() != format.ToLowerInvariant()) throw new ArgumentException("La extensión debe coincidir con el formato.");
         var target = _workspace.Resolve(path); var before = File.Exists(target) ? _workspace.ReadBytes(path) : null;
         if (expectedHash is null ? before is not null : before is null || AppPaths.Hash(before) != expectedHash) throw new IOException("Lee el documento actual antes de proponer una sustitución; cambió desde la última lectura.");
@@ -198,7 +219,7 @@ internal sealed class ChangeStore
         if (before is not null && before.SequenceEqual(after)) throw new IOException("La propuesta no cambia el documento.");
         foreach (var old in Items.Where(c => c.Path.Equals(path, StringComparison.OrdinalIgnoreCase) && c.Status == "pending")) { old.Status = "superseded"; old.Save(); }
         var item = new ProposedChange { Project = _workspace.Root, Path = path, ArtifactFormat = format, Before = before is null ? "No existe" : "SHA-256 " + AppPaths.Hash(before), After = content,
-            BeforeHash = before is null ? null : AppPaths.Hash(before), BeforeBinary = before is null ? null : Convert.ToBase64String(before), AfterBinary = Convert.ToBase64String(after), Reason = reason };
+            BeforeHash = before is null ? null : AppPaths.Hash(before), BeforeBinary = before is null ? null : Convert.ToBase64String(before), AfterBinary = Convert.ToBase64String(after), Reason = reason, Validation = validation };
         item.Save(); Items.Add(item); Changed?.Invoke(item); return item;
     }
     internal void Apply(string id)

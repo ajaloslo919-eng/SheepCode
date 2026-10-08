@@ -22,6 +22,22 @@ internal static class PortableChecks
             [new(0, "Intel Iris Xe Graphics", 0x8086, 128L * 1048576, false, SharedBytes: 16 * gib), new(1, "NVIDIA GeForce RTX 4060 Laptop GPU", 0x10de, 8 * gib, false, SharedBytes: 16 * gib)], true, ac);
         var celeron = ModelCatalog.Recommend(hybrid with { RamBytes = 4 * gib, Threads = 2, Avx2 = false, Cpu = "Celeron" });
         Assert(celeron.Kind == "strata-cpu" && celeron.Id == "qwen3-0.6b", "Celeron sin AVX2 no seleccionó el perfil pequeño.");
+        var coder = ModelCatalog.LowMemory("qwen2.5-coder-0.5b");
+        Assert(coder.Kind == "strata-cpu" && coder.Context == 4096 && coder.Model?.File.EndsWith("q8_0.gguf") == true && coder.DownloadBytes == 675710848,
+            "El perfil Coder no usa el activo fijado o los límites de Strata CPU.");
+        Assert(!ModelCatalog.CpuSupported("qwen3-1.7b"), "Un modelo grande entró en el perfil limitado.");
+        var granite = ModelCatalog.LowMemory("granite-4.0-h-350m");
+        Assert(granite.Kind == "strata-cpu" && granite.Context == 4096 && granite.DownloadBytes == 366195616 &&
+            granite.Model?.Sha256 == "c7d9873640dc303b6773dcc44e72e5bdf533e1c95ca8421e6191fbff5c94c942" &&
+            granite.Model.Repository == "ibm-granite/granite-4.0-h-350m-GGUF" && granite.Explanation.Contains("1536 MiB"),
+            "Granite no usa el activo oficial fijado o los límites de Strata CPU.");
+        rows.Add(new { check = "granite-pinned-cpu-profile", selected = granite.Id, context = granite.Context, bytes = granite.DownloadBytes });
+        var graniteLarger = ModelCatalog.LowMemory("granite-4.0-h-1b");
+        Assert(graniteLarger.Kind == "strata-cpu" && graniteLarger.Context == 4096 && graniteLarger.DownloadBytes == 901162208 &&
+            graniteLarger.Model?.Sha256 == "da3d737121a96f3c9a316685212376257a7f167b74380855666dd488d6af3bcb" &&
+            graniteLarger.Model.File == "granite-4.0-h-1b-Q4_K_M.gguf" && graniteLarger.Label.Contains("experimental"),
+            "El Granite de 1,5B no conserva el activo Q4 verificado y sus límites.");
+        rows.Add(new { check = "granite-h1b-pinned-cpu-profile", selected = graniteLarger.Id, context = graniteLarger.Context, bytes = graniteLarger.DownloadBytes });
         var probes = new[] { new VerifiedGpu("Vulkan0", "Intel Iris Xe Graphics", 16 * gib), new VerifiedGpu("Vulkan1", "NVIDIA GeForce RTX 4060 Laptop GPU", 7 * gib) };
         var chosen = GpuPlanner.Choose(hybrid, probes, 5 * gib);
         Assert(chosen.Devices == "Vulkan1" && chosen.BudgetBytes <= 7 * gib, "Se sumó la RAM integrada al presupuesto de la GPU portátil.");

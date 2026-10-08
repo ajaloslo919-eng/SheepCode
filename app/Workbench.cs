@@ -74,7 +74,7 @@ internal sealed partial class MainForm
         web.Controls.Add(Flow(back, read, close), 0, 1); web.Controls.Add(_webTabs, 0, 2); web.Controls.Add(_webInfo, 0, 3); browser.Controls.Add(web);
         _browserTools.Changed += () => Ui(() => { if (_webTabs.SelectedTab?.Controls.OfType<Microsoft.Web.WebView2.WinForms.WebView2>().FirstOrDefault() is { } current) _address.Text = current.Source?.AbsoluteUri ?? ""; _webInfo.Text = "🌐 " + _webTabs.TabCount + " pestaña(s) · pide a Sheep leer o actuar aquí"; });
 
-        var models = NewPage("Modelos"); models.AutoScroll = true; var model = Stack(80, 52, 52, 48, -1); model.Padding = new(10); model.Dock = DockStyle.Top; model.Height = 520;
+        var models = NewPage("Modelos"); models.AutoScroll = true; var model = Stack(80, 52, 52, 52, 52, 48, -1); model.Padding = new(10); model.Dock = DockStyle.Top; model.Height = 632;
         var title = LabelFor("🧠 El cerebro local de Sheep\nTu modelo, sus gráficas y las opciones de instalación\nEl perfil original conserva Strata + RX 580 🌸", 12); title.ForeColor = Accent; model.Controls.Add(title, 0, 0);
         Button load = ButtonFor("✨ Cargar IA", true), unload = ButtonFor("⏸ Liberar"), status = ButtonFor("↻ Estado");
         load.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Activa el motor", token); RefreshModels(); });
@@ -83,12 +83,21 @@ internal sealed partial class MainForm
         analyze.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Analiza el sistema", token); });
         install.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala el modelo recomendado", token); RefreshModels(); });
         model.Controls.Add(Flow(load, unload, status), 0, 1); model.Controls.Add(Flow(analyze, install), 0, 2);
+        Button coder = ButtonFor("🐑 Qwen2.5-Coder"), granite = ButtonFor("🌱 Granite 350M"), granite1b = ButtonFor("🌷 Granite 1.5B"), restore = ButtonFor("↶ Perfil anterior");
+        coder.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala Qwen2.5-Coder", token); RefreshModels(); RefreshSettings(); });
+        granite.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala Granite 4.0", token); RefreshModels(); RefreshSettings(); });
+        granite1b.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala Granite 1.5B", token); RefreshModels(); RefreshSettings(); });
+        restore.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Restaura el perfil anterior", token); RefreshModels(); RefreshSettings(); });
+        var modelTip = new ToolTip(); modelTip.SetToolTip(coder, "Instala y selecciona el modelo oficial 0.5B Instruct Q8_0 en Strata CPU, con descarga verificada. Conserva el perfil anterior. Revisa el código generado.");
+        modelTip.SetToolTip(granite, "Opción experimental: Granite 4.0 H 350M Q8_0 oficial de IBM en Strata CPU. Descarga verificada, contexto 4096 y perfil anterior conservado. Las pruebas detectaron código incorrecto; revisa las propuestas.");
+        modelTip.SetToolTip(granite1b, "Opción experimental: Granite 4.0 H1B de IBM, 1.5B parámetros, Q4_K_M de 901 MB. Descarga verificada, contexto 4096 y presupuesto 1536 MiB. Las pruebas de creación y corrección de código fallaron. Conserva el perfil anterior; revisa las propuestas.");
+        model.Controls.Add(Flow(granite1b, restore), 0, 3); model.Controls.Add(Flow(coder, granite), 0, 4);
         _powerMode.Items.AddRange(["🔋 Automático", "🌱 Ahorro", "⚡ Perfil completo"]);
         StyleCombo(_powerMode);
         _powerMode.SelectedIndexChanged += (_, _) => { if (_refreshingSettings || _powerMode.SelectedIndex < 0) return; var command = _powerMode.SelectedIndex switch { 0 => "Modo portátil automático", 1 => "Activa el modo ahorro", _ => "Desactiva el modo ahorro" }; StartTask(async token => { try { await _agent.SubmitAsync(command, token); } finally { RefreshSettings(); RefreshModels(); } }); };
         var powerLabel = LabelFor("💻 Energía", 10); powerLabel.Dock = DockStyle.None; powerLabel.Width = 94; powerLabel.Height = 34;
-        model.Controls.Add(Flow(powerLabel, _powerMode), 0, 3);
-        _modelText.WordWrap = true; _modelText.Font = new("Consolas", 10); model.Controls.Add(_modelText, 0, 4); models.Controls.Add(model);
+        model.Controls.Add(Flow(powerLabel, _powerMode), 0, 5);
+        _modelText.WordWrap = true; _modelText.Font = new("Consolas", 10); model.Controls.Add(_modelText, 0, 6); models.Controls.Add(model);
         _tabs.TabPages.Add(_compactFiles);
         _modelTimer.Interval = 5000; _modelTimer.Tick += async (_, _) => { _engine.RefreshPowerPriority(); if (_tabs.SelectedIndex == 6) RefreshModels(); RunDueAutomation(); await AutoCheckUpdateAsync(); }; _modelTimer.Start(); RefreshModels();
     }

@@ -18,11 +18,15 @@ Los modelos se descargan de repositorios fijados por revisión y se verifican po
 
 La voz expresiva Ono_Anna permanece en la RX 580 cuando se reutiliza su instalación original. Un PC que carece del paquete neuronal RX 580 trabaja por texto y puede usar dictado; la lectura de voz figura **sin configurar** y no se sustituye por una voz diferente. Este setup no descarga ni convierte el paquete neuronal de voz.
 
-## Qwen rápido ⚡
+## CPU rápido ⚡
 
 El perfil Strata CPU con Qwen3-0.6B usa un cálculo Q8 SSE2 optimizado, conserva la caché de tokens entre herramientas y exige los campos completos de cada acción. Mantiene contexto 4096 y presupuesto 1536 MiB.
 
-La casilla **⚡ Qwen rápido** activa instrucciones breves, descubre las 55 skills a demanda y prelee el archivo abierto si lo mencionas. También puedes escribir o dictar y aceptar «Activa el modo rápido», «Desactiva el modo rápido» y «Estado del rendimiento». Requiere la skill models activa; el modelo solo consulta `performance_status`. Desactivar la casilla restaura instrucciones más amplias y el catálogo inicial; las mejoras SSE2 y de caché siguen en el motor.
+La casilla **⚡ CPU rápido** activa instrucciones breves, descubre las 57 skills a demanda y prelee el archivo abierto si lo mencionas. También puedes escribir o dictar y aceptar «Activa el modo rápido», «Desactiva el modo rápido» y «Estado del rendimiento». Requiere la skill models activa; el modelo solo consulta `performance_status`. Desactivar la casilla restaura instrucciones más amplias y el catálogo inicial; las mejoras SSE2 y de caché siguen en el motor.
+
+Como alternativa explícita para 4 GB está **🌱 Granite 4.0 H 350M Q8_0** oficial de IBM (366 MB). Selecciónalo en el setup, pulsa **🌱 Granite 350M** en Modelos o escribe/dicta y acepta «Instala Granite 4.0». La descarga verifica revisión, tamaño y SHA-256. Usa el grafo híbrido Mamba2/atención y su plantilla Granite en Strata CPU, contexto 4096, hasta dos hilos, límite de motor 1536 MiB y modo rápido. Su caché continúa historia intacta y se reinicia si cambia. Consulta «Estado del modelo»; «Desactiva el motor» lo libera y «Restaura el perfil anterior» vuelve al perfil guardado sin borrar pesos. Requiere models activa. **Es experimental: las pruebas detectaron código incorrecto y dejaron sus propuestas sin aplicar; revisa todo el código.** La recomendación automática de los equipos conserva su selección existente, sin usar una comparación de modelos.
+
+También puedes seleccionar **🌷 Granite 4.0 H1B (1.5B) Q4_K_M**, oficial de IBM y experimental. Aunque se llama H1B, tiene 1,5B parámetros; descarga 901 MB con revisión y SHA-256 verificados. Está en el setup, botón 🌷 Granite 1.5B y orden humana «Instala Granite 1.5B». Mantiene contexto 4096, hasta dos hilos y 1536 MiB; prueba memoria y código antes de asumir que completa una tarea. Los pesos pueden instalarse en otra unidad desde el setup. `model_status` consulta el perfil, los controles del motor lo activan/detienen y «Restaura el perfil anterior» recupera el perfil y carpeta anteriores. Q4_K_M usa kernels CPU ggml; el kernel Q8 SSE2 solo aplica a tensores Q8_0. No cambia la recomendación automática. Las pruebas reales del agente con H1B fallaron tanto al crear como al corregir el ejercicio de Python con while. La corrección de caché se verificó por separado; no demuestra código correcto.
 
 Las propuestas conservan su diff y protección ante ediciones concurrentes. El tiempo de `performance_status` pertenece al motor; el flujo completo añade herramientas, GUI y voz. El modelo sigue siendo pequeño: revisa y prueba el código.
 
@@ -40,6 +44,10 @@ También puedes escribir o dictar y aceptar «Estado del portátil», «Activa e
 
 Abre una carpeta de proyecto. Sheep propone cambios y muestra el diff; pulsa **Aplicar** para guardarlos. **Deshacer** protege las ediciones hechas después. Las comprobaciones de código requieren habilitarlas; Python, Node o el SDK .NET se detectan por separado si están instalados.
 
+**🛡️ Revisar código** viene activado y se aplica a todos los modelos antes del diff. La sintaxis se comprueba en el archivo completo, tanto al crear como al editar. Si pides `while` o `for`, se busca un bloque real en el árbol de sintaxis; en Python se comprueban también los `input`/`print` pedidos y contadores simples sin actualización. Los errores vuelven al mismo modelo para corregirlos. Tras tres candidatos inválidos se detiene sin mostrar ni guardar su código. El programa propuesto no se ejecuta durante esta revisión.
+
+Puedes usar «Estado de la revisión de código», «Comprueba la sintaxis de archivo.py» y «Activa/Desactiva la revisión de código», por texto o dictado revisado y aceptado. La casilla permite el mismo ajuste. El modelo dispone de `validation_status` y `validate_code(path,content)` para consultar; no puede desactivar la revisión ni habilitar pruebas. El setup incluye Python 3.12.10 privado, sin modificar el Python del sistema. Python, C#, JavaScript, JSON y XML/SVG tienen analizador; otros formatos se marcan sin validar. La revisión no prueba dependencias, resultados ni toda la lógica. El diff muestra el alcance y los avisos; Aplicar, Deshacer y los permisos de ejecución se conservan.
+
 Los archivos para modificar SheepCode quedan en:
 
 - `source/app`: GUI, agente, herramientas, voz y skills de fábrica.
@@ -50,9 +58,21 @@ Los archivos para modificar SheepCode quedan en:
 
 Instala el SDK .NET 8 para recompilar el código C#. En `source`, ejecuta `build-source.ps1`; el resultado queda en `app/bin/Release/net8.0-windows`. Cierra SheepCode antes de reemplazar DLL de su carpeta `app`. Conserva una copia de tus cambios. El lanzador nativo y el setup se pueden recompilar con Visual Studio C++ y Windows SDK, siguiendo `packaging/build-release.ps1`. Ese script usa las descargas originales de sus manifiestos; no incluye sesiones privadas ni preferencias de la máquina de desarrollo.
 
+## Imágenes 🖼️
+
+Pulsa **🖼️**, pega con **Ctrl+V** o arrastra imágenes al cuadro de texto. Puedes quitar adjuntos antes de enviar. El panel **🖼️ Imágenes** ofrece **🔎 Texto** para OCR y **👁️ Ver** para interpretar objetos/dibujos. **📦** instala la visión local (636 MB de pesos); la casilla 👁️ la activa/desactiva. Si envías solo imágenes con visión instalada/activa, se interpretan; en caso contrario se solicita su texto. Las imágenes del proyecto se abren con doble clic y 🖼️ vuelve a la vista previa.
+
+Admite PNG, JPG/JPEG, BMP, GIF y TIFF; de archivos animados o con páginas lee solo la primera imagen. Máximo cuatro por mensaje, 16 MiB y 16 millones de píxeles por imagen, 8192 píxeles por lado; el conjunto del mensaje está limitado a 32 MiB y 24 millones de píxeles. WebP/HEIC/SVG aún no se decodifican aquí. Conserva los originales y la transparencia de la vista previa; las copias viven en la conversación y se retiran al cerrar o cambiar de proyecto.
+
+El motor de código, incluido [Granite H1B](https://huggingface.co/ibm-granite/granite-4.0-h-1b), recibe **resultados de herramientas, no píxeles**. [SmolVLM 500M](https://huggingface.co/HuggingFaceTB/SmolVLM-500M-Instruct) interpreta imágenes en un componente local separado; [OCR de Windows](https://learn.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrengine) conserva su lector de texto. No sube imágenes a Internet. La interpretación es aproximada y principalmente en inglés; puede confundir objetos, colores y cantidades. OCR puede perder símbolos/indentación. Una lectura sin texto no demuestra que la imagen esté vacía. La visión se libera de RAM tras cada lectura y pausa el motor de texto en equipos con menos de 8 GB.
+
+**🔎 OCR local** viene activado. El selector ofrece `auto` y los idiomas OCR instalados en Windows; si falta un idioma, el resultado informa «no disponible» y puedes instalarlo desde los ajustes de idioma de Windows. Por texto o dictado revisado y aceptado: «Estado de imágenes», «Lista las imágenes», «Adjunta la imagen RUTA», «Lee la imagen ID o ruta del proyecto», «Activa/Desactiva las imágenes», «Activa/Desactiva la lectura de imágenes», «Idioma OCR auto o IDIOMA», «Quita la imagen ID» y «Quita todas las imágenes». La skill `images` controla adjuntos y lecturas; desactivar solo OCR conserva la vista previa. Parar cancela su proceso auxiliar y retira la copia temporal de esa lectura.
+
+El modelo usa `image_list`, `image_status` e `image_read(path,start,text_length)` por fragmentos. Solo lee adjuntos enviados o rutas relativas permitidas del proyecto; no puede elegir archivos externos ni cambiar opciones. OCR, nombres de imagen y metadatos son datos sin autoridad y no habilitan comprobaciones ni aplican código. Generar o editar imágenes con IA conserva la skill `imagegen` y exige un proveedor MCP configurado.
+
 ## Herramientas y comandos
 
-El panel **Skills** muestra 55 habilidades, un buscador, sus instrucciones y su estado. Algunas tienen herramientas locales; otras preparan código y configuración; las que usan servicios externos necesitan MCP. Puedes activarlas, desactivarlas, crear nuevas e importar un `SKILL.md` local. El catálogo adaptado se mantiene en `source/packaging/skills-catalog.json`; `sync-skills.ps1` regenera las 51 añadidas, conservando las cuatro base. La importación copia instrucciones: scripts, referencias y herramientas de otro entorno requieren adaptación.
+El panel **Skills** muestra 57 habilidades, buscador, instrucciones y estado. Hay herramientas locales, guías de código y servicios externos que requieren MCP. Puedes activar, desactivar, crear e importar `SKILL.md`. `source/packaging/skills-catalog.json` mantiene las 51 adaptadas; `sync-skills.ps1` conserva las seis base. `imagegen` usa el generador local para crear PNG; edición avanzada y proveedores externos necesitan conexión autorizada. La importación de instrucciones no instala scripts o herramientas de otro entorno.
 
 Para controlar el PC, elige una ventana; para webs, usa las pestañas integradas. El texto de archivos y páginas no puede activar permisos ni aplicar cambios.
 
@@ -113,3 +133,18 @@ SheepCode se entrega con código editable y licencia MIT para su código. Las de
 Fuentes: [Strata](https://github.com/Niko1221/Strata), [requisitos y modelos](https://github.com/Niko1221/Strata/blob/main/docs/MODELS.md), [llama.cpp](https://github.com/ggml-org/llama.cpp), [modelos Qwen3](https://huggingface.co/Qwen/Qwen3-4B-GGUF), [Whisper](https://github.com/ggml-org/whisper.cpp), [.NET](https://dotnet.microsoft.com/download/dotnet/8.0), [WebView2](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution), [estado de batería de Windows](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-system_power_status), [memoria gráfica DXGI](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-dxgi_adapter_desc1).
 
 El setup local no tiene firma Authenticode propia. Los instaladores de Python y WebView2 conservan sus firmas originales verificadas al construir el paquete. Comprueba el archivo `SHA256SUMS.txt` si transfieres la distribución.
+
+## Objetos 3D, Blender y Unity 🧊
+
+Abre **🧊 3D** y usa 📎 para adjuntar FBX/BLEND o archivos `.unity`, `.prefab` y `.asset` de texto. También puedes arrastrarlos al cuadro o abrirlos desde el árbol del proyecto. **🔎 Datos** muestra objetos, materiales y geometría base; **🧊 Vista** dibuja su malla local. **👁️ Forma** interpreta esa vista con la visión instalada. Blender debe estar instalado: **Blender…** selecciona `blender.exe`; «Configura Blender auto» lo detecta. Unity YAML no requiere Unity Editor, no inicia el juego ni ejecuta scripts; sus GUID se muestran como referencias. Binarios y AssetBundles no se decodifican aquí.
+
+Por texto o dictado aceptado: «Adjunta el archivo 3D RUTA», «Inspecciona la escena ID o ruta del proyecto», «Interpreta el objeto 3D ID», «Lista las escenas», «Estado de 3D», «Activa/Desactiva 3D», «Quita el archivo 3D ID» y «Quita todas las escenas». No evalúa modificadores, drivers, animaciones o shaders. La vista puede omitir mallas grandes/enlazadas. Solo lectura: originales y scripts se conservan.
+
+## Crear imágenes locales 🎨
+
+**🎨 Crear** tiene un cuadro de descripción, Crear, vista previa y **💾 PNG**. **📦** instala [SD-Turbo](https://huggingface.co/stabilityai/sd-turbo) reducido por [Green-Sky](https://huggingface.co/Green-Sky/SD-Turbo-GGUF), con revisión/SHA verificados. Elige una carpeta con 3 GB libres: los pesos descargan 2,02 GB. Requiere Windows x64 y al menos 8 GB de RAM. `auto` usa una RTX detectada por el runtime para difusión/VAE; el texto auxiliar va en CPU y la RX 580 mantiene su voz. CPU es una selección explícita y puede tardar varios minutos. La recomendación del modelo de código no cambia.
+
+Escribe o dicta y acepta «Genera una imagen: DESCRIPCIÓN», «Crea la imagen de un gato», «Hazme un dibujo de una oveja», «Estado del generador de imágenes», «Activa/Desactiva la generación de imágenes» o «Configura generación CPU/auto». La salida es un PNG 512 × 512 temporal; tú eliges dónde guardarlo. **Parar** cancela el proceso propio y retira la salida incompleta. No genera transparencia ni garantiza texto, anatomía o cantidades; descripciones en inglés funcionan mejor. Editar referencias y otros proveedores siguen disponibles por MCP configurado. Los pesos tienen [licencia propia](https://huggingface.co/stabilityai/sd-turbo/blob/main/LICENSE.md), incluida en `licenses/SD-Turbo-Community.md`.
+
+
+Si eliges un PNG existente, SheepCode pide confirmar y conserva su contenido anterior en una copia .bak. Si el archivo cambia durante la confirmación, conserva esa edición y pide elegir de nuevo dónde guardar.

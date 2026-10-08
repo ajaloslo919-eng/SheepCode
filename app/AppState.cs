@@ -60,6 +60,12 @@ internal sealed class Preferences
     public string PortableMode { get; set; } = "auto";
     public bool AutoCheckUpdates { get; set; }
     public bool FastCpuMode { get; set; } = true;
+    public bool ValidateCode { get; set; } = true;
+    public bool ImageOcr { get; set; } = true;
+    public bool VisionEnabled { get; set; } = true;
+    public bool GenerateImages { get; set; } = true;
+    public string BlenderExecutable { get; set; } = "";
+    public string ImageOcrLanguage { get; set; } = "auto";
     public static string PathName => Path.Combine(AppPaths.State, "preferences.json");
     public static Preferences Load()
     {
@@ -71,6 +77,7 @@ internal sealed class Preferences
         if (Reasoning is not ("none" or "low" or "medium" or "high")) throw new InvalidDataException("Nivel de razonamiento no válido.");
         if (PortableMode is not ("auto" or "eco" or "performance")) throw new InvalidDataException("Modo portátil no válido.");
         MaximumSteps = Math.Clamp(MaximumSteps, 1, 16);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(ImageOcrLanguage, @"\A(?:auto|[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*)\z")) throw new InvalidDataException("Idioma OCR no válido.");
     }
     public void Save() { Validate(); AppPaths.SaveJson(PathName, this); }
 }

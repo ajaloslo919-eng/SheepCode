@@ -107,7 +107,9 @@ internal static class ModelProvisioner
         else if (plan.Kind == "strata-cpu")
         {
             var model = plan.Model ?? throw new InvalidOperationException("Falta el modelo pequeño del catálogo.");
-            if (model.Id != "qwen3-0.6b") throw new InvalidOperationException("Modelo fuera del perfil Strata de 4 GB.");
+            if (!ModelCatalog.CpuSupported(model.Id) || ModelCatalog.Models.Single(m => m.Id == model.Id) != model)
+                throw new InvalidOperationException("Modelo fuera del catálogo verificado Strata de 4 GB.");
+            if (!hardware.X64 || hardware.RamGiB < 3.5) throw new PlatformNotSupportedException("Strata CPU necesita Windows x64 y al menos 4 GB de RAM.");
             var modelPath = SafeFiles.Child(modelFolder, Path.Combine(model.Id, model.File));
             using var downloader = new VerifiedDownloader(); await downloader.DownloadAsync(model.Url, modelPath, model.Size, model.Sha256, progress, token);
             var executable = await InstallCpuRuntimeAsync(root, progress, token);

@@ -86,7 +86,7 @@ internal static class Installer
         if (!File.Exists(pathsFile) && request.Plan.Kind != "reuse") DistributionJson.Save(pathsFile, new InstallationPaths { Models = Path.GetFullPath(request.Models) });
         var prefs = Path.Combine(root, "state", "preferences.json");
         if (!File.Exists(prefs)) DistributionJson.Save(prefs, new { lastProject = Path.Combine(root, "source"), reasoning = "none", readAloud = false, allowChecks = false, emotion = "calmness", maximumSteps = 10, disabledSkills = Array.Empty<string>() });
-        DistributionJson.Save(Path.Combine(root, "installation.json"), new { product = "SheepCode", version = "0.4.1", installed = DateTimeOffset.UtcNow, source = Path.Combine(root, "source"), models = request.Models, selected = request.Plan.Id, setup = Environment.ProcessPath });
+        DistributionJson.Save(Path.Combine(root, "installation.json"), new { product = "SheepCode", version = "0.5.0", installed = DateTimeOffset.UtcNow, source = Path.Combine(root, "source"), models = request.Models, selected = request.Plan.Id, setup = Environment.ProcessPath });
         await WriteShortcutsAsync(root, request.DesktopShortcut, request.MenuShortcut, token);
         if (request.Register)
         {
@@ -98,7 +98,7 @@ internal static class Installer
                 Microsoft.Web.WebView2.Core.CoreWebView2Environment.GetAvailableBrowserVersionString();
             }
             using var registration = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\SheepCode-" + mutexName[^12..]);
-            registration.SetValue("DisplayName", "SheepCode · Sheep & Kuky"); registration.SetValue("DisplayVersion", "0.4.1"); registration.SetValue("InstallLocation", root);
+            registration.SetValue("DisplayName", "SheepCode · Sheep & Kuky"); registration.SetValue("DisplayVersion", "0.5.0"); registration.SetValue("InstallLocation", root);
             registration.SetValue("DisplayIcon", Path.Combine(root, "app", "SheepCode.exe")); registration.SetValue("Publisher", "SheepCode contributors");
             registration.SetValue("UninstallString", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(root, "Uninstall-SheepCode.ps1") + "\"");
         }

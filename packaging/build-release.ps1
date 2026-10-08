@@ -9,6 +9,7 @@ if (!$taskBuild.StartsWith($taskPackaging+'\',[StringComparison]::OrdinalIgnoreC
 if(Test-Path -LiteralPath $taskBuild){Remove-Item -LiteralPath $taskBuild -Recurse -Force}
 New-Item -ItemType Directory -Path $taskBuild,$taskDownloads -Force|Out-Null
 $taskMeta=Get-Content (Join-Path $taskPackaging 'upstream-metadata.json') -Raw|ConvertFrom-Json
+$taskValidation=Get-Content (Join-Path $taskPackaging 'code-validation.json') -Raw|ConvertFrom-Json
 $taskPinned=@(
     @{file='dotnet-runtime-latest.zip';url=$taskMeta.dotnet.url;hash=$taskMeta.dotnet.hash;algorithm='SHA512'},
     @{file='windowsdesktop-runtime-latest.zip';url=$taskMeta.windowsdesktop.url;hash=$taskMeta.windowsdesktop.hash;algorithm='SHA512'},
@@ -16,6 +17,7 @@ $taskPinned=@(
     @{file='llama-vulkan.zip';url='https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-vulkan-x64.zip';hash='55a378aa095b466979d85075234f66d7655c7a7483222af0c006c0e55b4d7bd6';algorithm='SHA256'},
     @{file='strata-source.zip';url=('https://github.com/Niko1221/Strata/archive/'+$taskMeta.strataRevision+'.zip');hash=$taskMeta.strataSha256;algorithm='SHA256'},
     @{file='python-3.12.10-amd64.exe';url='https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe';hash=$taskMeta.pythonSha256;algorithm='SHA256'},
+    @{file=$taskValidation.python.name;url=$taskValidation.python.url;hash=$taskValidation.python.sha256;algorithm='SHA256'},
     @{file='MicrosoftEdgeWebview2Setup.exe';url='https://go.microsoft.com/fwlink/p/?LinkId=2124703';hash=(Get-Content (Join-Path $taskPackaging 'webview2.json') -Raw|ConvertFrom-Json).webview2Sha256;algorithm='SHA256'})
 foreach($taskPin in $taskPinned){
     $taskFile=Join-Path $taskDownloads $taskPin.file
@@ -46,6 +48,7 @@ Copy-SourceTree (Join-Path $taskWork 'shared') (Join-Path $taskPayload 'source\s
 Copy-SourceTree (Join-Path $taskWork 'setup') (Join-Path $taskPayload 'source\setup')
 Copy-SourceTree (Join-Path $taskWork 'engine') (Join-Path $taskPayload 'source\engine')
 Copy-SourceTree $taskPackaging (Join-Path $taskPayload 'source\packaging')
+Expand-Archive -LiteralPath (Join-Path $taskDownloads $taskValidation.python.name) -DestinationPath (Join-Path $taskPayload 'runtime\code-validation\python') -Force
 Copy-Item (Join-Path $taskPackaging 'build-source.ps1') (Join-Path $taskPayload 'source\build-source.ps1')
 Copy-Item (Join-Path $taskPackaging 'SheepCode.sln') (Join-Path $taskPayload 'source\SheepCode.sln')
 Copy-Item (Join-Path $taskPackaging 'GUIDE.md') (Join-Path $taskPayload 'README.md')

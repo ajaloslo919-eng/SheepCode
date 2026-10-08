@@ -93,11 +93,19 @@ internal static class Diagnostics
             await agent.SubmitAsync("Activa la skill models", CancellationToken.None);
             Assert(await agent.ControlAsync("No instales el modelo recomendado", CancellationToken.None) is null, "Una negación inició una instalación.");
             Assert(await agent.ControlAsync("Lee literalmente: Instala el modelo recomendado", CancellationToken.None) is null, "Un texto literal inició una instalación.");
+            Assert(await agent.ControlAsync("Lee literalmente: Instala Qwen2.5-Coder", CancellationToken.None) is null, "El texto literal instaló Coder.");
+            Assert(await agent.ControlAsync("No instales Qwen2.5-Coder", CancellationToken.None) is null, "La negación instaló Coder.");
+            Assert(await agent.ControlAsync("Lee literalmente: Instala Granite 4.0", CancellationToken.None) is null, "El texto literal instaló Granite.");
+            Assert(await agent.ControlAsync("No instales Granite 4.0", CancellationToken.None) is null, "La negación instaló Granite.");
+            Assert(await agent.ControlAsync("Lee literalmente: Instala Granite 1.5B", CancellationToken.None) is null, "El texto literal instaló Granite 1.5B.");
+            Assert(await agent.ControlAsync("No instales Granite 1.5B", CancellationToken.None) is null, "La negación instaló Granite 1.5B.");
             using (var model = JsonDocument.Parse(await agent.SubmitAsync("Estado del modelo", CancellationToken.None)))
                 Assert(model.RootElement.GetProperty("profile").GetString() == engine.Profile.Kind, "El diálogo no refleja el perfil real de esta instalación.");
             rows.Add(new { check = "hardware-analysis-model-state-skill-toggle-and-install-command-guards", passed = true });
             var registry = await agent.SubmitAsync("¿Qué puedes hacer?", CancellationToken.None);
             Assert(registry.Contains("changes") && registry.Contains("voice") && registry.Contains("checks") && registry.Contains("system_info"), "El diálogo no conoce las capacidades.");
+            Assert(registry.Contains("Instala Granite 4.0"), "El diálogo compartido no conoce Granite y sus controles.");
+            Assert(registry.Contains("Instala Granite 1.5B") && registry.Contains("Q4_K_M"), "El diálogo compartido no conoce Granite 1.5B y su cuantización.");
             rows.Add(new { check = "integrated-capabilities-in-shared-dialogue", passed = true });
             AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "self-test.json"), new { status = "complete", passed = rows.Count, rows,
                 installedExe = Environment.ProcessPath, scope = "Herramientas deterministas de la aplicación instalada; no ejecuta modelos ni mide rendimiento de IA." });

@@ -1,6 +1,39 @@
 {
   "models": [
     {
+      "id": "granite-4.0-h-1b",
+      "label": "Granite 4.0 H1B (1.5B)",
+      "repository": "ibm-granite/granite-4.0-h-1b-GGUF",
+      "revision": "c2cb1972f511add21f3bae244990b8ff3a3ffb23",
+      "file": "granite-4.0-h-1b-Q4_K_M.gguf",
+      "size": 901162208,
+      "sha256": "da3d737121a96f3c9a316685212376257a7f167b74380855666dd488d6af3bcb",
+      "url": "https://huggingface.co/ibm-granite/granite-4.0-h-1b-GGUF/resolve/c2cb1972f511add21f3bae244990b8ff3a3ffb23/granite-4.0-h-1b-Q4_K_M.gguf",
+      "license": "apache-2.0"
+    },
+    {
+      "id": "granite-4.0-h-350m",
+      "label": "Granite 4.0 H 350M",
+      "repository": "ibm-granite/granite-4.0-h-350m-GGUF",
+      "revision": "a864f823cce6e6048b5752e2816fe7a23987d790",
+      "file": "granite-4.0-h-350m-Q8_0.gguf",
+      "size": 366195616,
+      "sha256": "c7d9873640dc303b6773dcc44e72e5bdf533e1c95ca8421e6191fbff5c94c942",
+      "url": "https://huggingface.co/ibm-granite/granite-4.0-h-350m-GGUF/resolve/a864f823cce6e6048b5752e2816fe7a23987d790/granite-4.0-h-350m-Q8_0.gguf",
+      "license": "apache-2.0"
+    },
+    {
+      "id": "qwen2.5-coder-0.5b",
+      "label": "Qwen2.5-Coder-0.5B Instruct",
+      "repository": "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+      "revision": "ebb2015119c907b064c512bf053e945850b5875f",
+      "file": "qwen2.5-coder-0.5b-instruct-q8_0.gguf",
+      "size": 675710848,
+      "sha256": "e1a77721fa97d412f121878223eec81fb4ae6f271e18f922d746711f67b344d1",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/ebb2015119c907b064c512bf053e945850b5875f/qwen2.5-coder-0.5b-instruct-q8_0.gguf",
+      "license": "apache-2.0"
+    },
+    {
       "id": "qwen3-0.6b",
       "label": "Qwen3-0.6B",
       "repository": "Qwen/Qwen3-0.6B-GGUF",

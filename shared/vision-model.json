@@ -1,0 +1,12 @@
+{
+  "id": "smolvlm-500m",
+  "label": "👁️ SmolVLM 500M · visión local CPU",
+  "repository": "ggml-org/SmolVLM-500M-Instruct-GGUF",
+  "revision": "72e986006ef53e37cdd3f6d4241c90b0f01df376",
+  "license": "Apache-2.0",
+  "assets": [
+    { "file": "SmolVLM-500M-Instruct-Q8_0.gguf", "size": 436806912, "sha256": "9d4612de6a42214499e301494a3ecc2be0abdd9de44e663bda63f1152fad1bf4", "url": "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/72e986006ef53e37cdd3f6d4241c90b0f01df376/SmolVLM-500M-Instruct-Q8_0.gguf" },
+    { "file": "mmproj-SmolVLM-500M-Instruct-f16.gguf", "size": 199468800, "sha256": "4b2fca922e549e9b9608f4ba56f93565dd5220e935ba5570a2a864a0fcc988a6", "url": "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/72e986006ef53e37cdd3f6d4241c90b0f01df376/mmproj-SmolVLM-500M-Instruct-f16.gguf" }
+  ],
+  "runtime": { "file": "llama-cpu.zip", "version": "b11146", "size": 18560055, "sha256": "14cf1303ca9ac3abd94816850532f9f9a69ac66fbaca3776fc6f9061c2fac1d1", "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-cpu-x64.zip", "license": "MIT" }
+}

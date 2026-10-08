@@ -29,6 +29,10 @@ internal static class SetupDiagnostics
                     if (!state.GetProperty("hardwareText").GetString()!.Contains("RTX 4070") || state.GetProperty("gpuCount").GetInt32() != 2 ||
                         !state.GetProperty("scrollable").GetBoolean() || !state.GetProperty("lastLineReachable").GetBoolean() || !state.GetProperty("installButtonVisible").GetBoolean())
                         throw new IOException("Se recortó el inventario de gráficas o quedó oculto el botón del setup.");
+                    if (!state.GetProperty("modelChoices").EnumerateArray().Any(p => p.GetProperty("id").GetString() == "granite-4.0-h-350m" && p.GetProperty("label").GetString()!.Contains("experimental")) ||
+                        state.GetProperty("selectedModel").GetString() == "granite-4.0-h-350m") throw new IOException("El setup no ofrece Granite experimental como alternativa manual.");
+                    if (!state.GetProperty("modelChoices").EnumerateArray().Any(p => p.GetProperty("id").GetString() == "granite-4.0-h-1b" && p.GetProperty("label").GetString()!.Contains("1.5B") && p.GetProperty("label").GetString()!.Contains("experimental")) ||
+                        state.GetProperty("selectedModel").GetString() == "granite-4.0-h-1b") throw new IOException("El setup no ofrece Granite 1.5B experimental como alternativa manual.");
                     form.CaptureWindow(Path.Combine(checks, $"setup-hybrid-{size.Width}.png"));
                 }
             }

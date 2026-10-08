@@ -85,8 +85,11 @@ internal sealed class SetupForm : Form
             }
             recommended = ModelCatalog.Recommend(system, ModelCatalog.FindExisting()); choice.Items.Clear(); choice.Items.Add(recommended);
             if (recommended.Kind != "strata-cpu") choice.Items.Add(ModelCatalog.LowMemory());
+            choice.Items.Add(ModelCatalog.LowMemory("qwen2.5-coder-0.5b"));
+            choice.Items.Add(ModelCatalog.LowMemory("granite-4.0-h-350m"));
+            choice.Items.Add(ModelCatalog.LowMemory("granite-4.0-h-1b"));
             if (recommended.Kind == "reuse" && ModelCatalog.StrataHardware(system) && system.DiskFreeBytes >= 100L * 1073741824) choice.Items.Add(ModelCatalog.Strata());
-            foreach (var model in ModelCatalog.Models.Where(m => m.Size < (recommended.Model?.Size ?? long.MaxValue) && m.Size + 3L * 1073741824 < system.DiskFreeBytes && m.Size * 1.25 + 700_000_000 < ModelCatalog.MemoryBudget(system)).Reverse())
+            foreach (var model in ModelCatalog.Models.Where(m => m.Id.StartsWith("qwen3-", StringComparison.Ordinal) && m.Size < (recommended.Model?.Size ?? long.MaxValue) && m.Size + 3L * 1073741824 < system.DiskFreeBytes && m.Size * 1.25 + 700_000_000 < ModelCatalog.MemoryBudget(system)).Reverse())
                 choice.Items.Add(new InstallPlan(model.Id, "🌱 " + model.Label + " · alternativa más ligera", "llama", "Descarga más pequeña y menor uso de memoria; revisa los cambios de código que proponga. Usa Vulkan si se verifica o CPU explícitamente.", model.Size, system.Portable || system.RamGiB < 7.5 ? 4096 : 8192, model));
             choice.Items.Add(ModelCatalog.EditorOnly()); choice.SelectedIndex = 0; install.Enabled = true;
         }
@@ -124,6 +127,7 @@ internal sealed class SetupForm : Form
         var last = hardware.GetPositionFromCharIndex(Math.Max(0, hardware.TextLength - 1));
         var button = RectangleToClient(install.RectangleToScreen(install.ClientRectangle));
         return new { size = new { Width, Height }, dpi = DeviceDpi, hardwareText = hardware.Text,
+            modelChoices = choice.Items.OfType<InstallPlan>().Select(p => new { id = p.Id, label = p.Label }).ToArray(), selectedModel = (choice.SelectedItem as InstallPlan)?.Id,
             scrollable = hardware.ScrollBars == RichTextBoxScrollBars.Vertical, lastLineReachable = last.Y >= 0 && last.Y < hardware.ClientSize.Height,
             installButtonVisible = ClientRectangle.Contains(button), gpuCount = system?.Gpus.Count(g => !g.Software), hardwareHeight = hardware.ClientSize.Height };
     }

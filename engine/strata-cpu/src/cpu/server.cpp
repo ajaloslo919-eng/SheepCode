@@ -1,5 +1,5 @@
-// SheepCode Strata fork: small dense models on CPU, including x64 Celeron without AVX.
-// MIT. ggml / llama dense graph, vocabulary and grammar are MIT dependencies; this
+// SheepCode Strata fork: small dense/hybrid models on x64 CPU without AVX.
+// MIT. ggml / llama graphs, vocabulary and grammar are MIT dependencies; this
 // server owns admission, bounded prefill, prefix reuse, transport and cancellation.
 #include "llama.h"
 #include "ggml-cpu.h"
@@ -83,28 +83,32 @@ static void memory_limit(uint64_t bytes) {
 static void error(httplib::Response &res, int status, const std::string &message, const std::string &code = "invalid_request") {
     res.status = status; res.set_content(json{{"error", {{"message", message}, {"type", code}, {"code", code}}}}.dump(), "application/json");
 }
-static std::string template_prompt(const json &messages) {
+static std::string template_prompt(const json &messages, const std::string &architecture) {
     if (!messages.is_array() || messages.empty() || messages.size() > 64) throw std::runtime_error("messages must contain 1..64 text messages");
     std::string prompt;
+    const bool granite = architecture == "granitehybrid";
+    const bool non_thinking_prefix = architecture == "qwen3";
     for (const auto &message : messages) {
         auto role = message.at("role").get<std::string>();
         if (role != "system" && role != "user" && role != "assistant" && role != "tool") throw std::runtime_error("unsupported role");
         const auto &content = message.at("content");
         if (!content.is_string()) throw std::runtime_error("this CPU profile accepts text only");
-        prompt += "<|im_start|>" + role + "\n";
+        prompt += granite ? "<|start_of_role|>" + role + "<|end_of_role|>" : "<|im_start|>" + role + "\n";
         // Keep the non-thinking prefix in earlier assistant turns too. Otherwise
         // the next tool step invalidates the KV cache before the generated action.
-        if (role == "assistant") prompt += "<think>\n\n</think>\n\n";
-        prompt += content.get<std::string>() + "<|im_end|>\n";
+        if (non_thinking_prefix && role == "assistant") prompt += "<think>\n\n</think>\n\n";
+        prompt += content.get<std::string>() + (granite ? "<|end_of_text|>\n" : "<|im_end|>\n");
     }
     // Qwen3's documented non-thinking assistant prefix: avoid an unbounded hidden
     // reasoning stream on weak CPUs. A GUI reasoning setting cannot override it.
-    prompt += "<|im_start|>assistant\n<think>\n\n</think>\n\n";
+    prompt += granite ? "<|start_of_role|>assistant<|end_of_role|>" : "<|im_start|>assistant\n";
+    if (non_thinking_prefix) prompt += "<think>\n\n</think>\n\n";
     return prompt;
 }
 
 class engine {
     options config;
+    std::string architecture;
     std::unique_ptr<llama_model, decltype(&llama_model_free)> model{nullptr, llama_model_free};
     std::unique_ptr<llama_context, decltype(&llama_free)> context{nullptr, llama_free};
     const llama_vocab *vocab = nullptr;
@@ -128,7 +132,7 @@ class engine {
 public:
     explicit engine(options value) : config(std::move(value)) {
         const uint64_t size = std::filesystem::file_size(std::filesystem::u8path(config.model));
-        if (size + 512 * mib > uint64_t(config.memory_mib) * mib) throw std::runtime_error("model exceeds the CPU profile memory budget; choose the integrated 0.6B model");
+        if (size + 512 * mib > uint64_t(config.memory_mib) * mib) throw std::runtime_error("model exceeds the CPU profile memory budget; choose an integrated small model");
         memory_limit(uint64_t(config.memory_mib) * mib);
         llama_backend_init();
         if (!strata_q8_sse2_verify()) throw std::runtime_error("SSE2 Q8 correctness check failed");
@@ -137,7 +141,11 @@ public:
         model.reset(llama_model_load_from_file(config.model.c_str(), mp));
         if (!model) throw std::runtime_error("cannot load GGUF");
         char arch[64]{}; llama_model_meta_val_str(model.get(), "general.architecture", arch, sizeof(arch));
-        if (std::string(arch) != "qwen3" || llama_model_n_params(model.get()) > 1100000000ULL) throw std::runtime_error("low-memory profile requires a dense Qwen3 model of at most 1.1B parameters");
+        architecture = arch;
+        const auto parameters = llama_model_n_params(model.get());
+        const bool dense = (architecture == "qwen3" || architecture == "qwen2") && parameters <= 1100000000ULL;
+        const bool hybrid = architecture == "granitehybrid" && parameters <= 1600000000ULL && llama_model_is_hybrid(model.get());
+        if (!dense && !hybrid) throw std::runtime_error("CPU profile requires integrated Qwen2/Qwen3 <=1.1B or Granite hybrid <=1.6B, within the memory budget");
         vocab = llama_model_get_vocab(model.get());
         auto cp = llama_context_default_params(); cp.n_ctx = config.context; cp.n_batch = 64; cp.n_ubatch = 32; cp.n_seq_max = 1;
         cp.n_threads = config.threads; cp.n_threads_batch = config.threads;
@@ -160,12 +168,20 @@ public:
         tokens.resize(size_t(written)); return tokens;
     }
     json health() const {
-        return {{"status", "ok"}, {"service", "strata"}, {"backend", "dense-cpu"}, {"loaded", true}, {"model", config.alias},
+        const bool hybrid = architecture == "granitehybrid";
+        const auto type = llama_model_ftype(model.get());
+        const char *quantization = type == LLAMA_FTYPE_MOSTLY_Q4_K_M ? "Q4_K_M" : type == LLAMA_FTYPE_MOSTLY_Q8_0 ? "Q8_0" : "mixed/other";
+        return {{"status", "ok"}, {"service", "strata"}, {"backend", hybrid ? "hybrid-cpu" : "dense-cpu"}, {"loaded", true}, {"model", config.alias},
+                {"parameters", llama_model_n_params(model.get())}, {"quantization", quantization},
                 {"max_context", config.context}, {"threads", config.threads}, {"memory_limit_mib", config.memory_mib},
                 {"isa_floor", "x86-64/SSE2"}, {"compiled_avx", ggml_cpu_has_avx()}, {"compiled_avx2", ggml_cpu_has_avx2()},
                 {"q8_kernel", "SSE2"}, {"q8_kernel_verified", true}, {"prefix_cache", true},
+                {"q8_kernel_scope", "Q8_0 dot products only; other quantizations use pinned ggml CPU kernels"},
+                {"prefix_cache_mode", hybrid ? "append-or-reset" : "prefix-rollback"},
+                {"architecture", architecture}, {"chat_template", hybrid ? "granite-4.0" : architecture == "qwen3" ? "qwen3-non-thinking" : "qwen2-chatml"},
                 {"reasoning", "none"}, {"images", false}, {"memory", memory_status()}, {"dependency", "llama.cpp/ggml 3cf03257f219afbe7334045ff7c6a06ac68c627d"}};
     }
+    std::string prompt(const json &messages) const { return template_prompt(messages, architecture); }
     void cancel() { cancelled.store(true); }
     json complete(const httplib::Request &req, const json &body) {
         std::unique_lock lock(generation, std::try_to_lock);
@@ -173,7 +189,7 @@ public:
         if (body.value("stream", false)) throw std::runtime_error("streaming is unavailable in this profile");
         const int limit = body.value("max_tokens", 512);
         if (limit < 1 || limit > 1536) throw std::runtime_error("max_tokens must be 1..1536");
-        const auto prompt = template_prompt(body.at("messages")); const auto tokens = tokenize(prompt);
+        const auto text_prompt = prompt(body.at("messages")); const auto tokens = tokenize(text_prompt);
         if (tokens.size() + size_t(limit) > size_t(config.context)) throw std::length_error("request (" + std::to_string(tokens.size()) + " tokens) plus output exceeds context (" + std::to_string(config.context) + " tokens)");
         const auto started = clock_type::now(); cancelled.store(false); active_request = &req; deadline = started + std::chrono::minutes(20);
         struct reset_request { engine &self; ~reset_request() { self.active_request = nullptr; self.deadline = clock_type::time_point::max(); } } reset{*this};
@@ -181,7 +197,13 @@ public:
         while (prefix < cached.size() && prefix < tokens.size() && cached[prefix] == tokens[prefix]) ++prefix;
         // Re-evaluate the last token so its logits are always current, even for an identical prompt.
         if (prefix == tokens.size() && prefix) --prefix;
-        if (!llama_memory_seq_rm(llama_get_memory(context.get()), 0, llama_pos(prefix), -1)) { prefix = 0; llama_memory_clear(llama_get_memory(context.get()), true); }
+        // Mamba's current recurrent state can be continued, but cannot in general
+        // rewind to an arbitrary earlier token. Reset both recurrent/attention
+        // memory when history diverges, including an identical prompt re-run.
+        if ((architecture == "granitehybrid" && prefix < cached.size()) ||
+            !llama_memory_seq_rm(llama_get_memory(context.get()), 0, llama_pos(prefix), -1)) {
+            prefix = 0; llama_memory_clear(llama_get_memory(context.get()), true);
+        }
         cached.resize(prefix);
         for (size_t i = prefix; i < tokens.size();) {
             if (should_abort()) throw std::runtime_error("generation cancelled");
@@ -230,7 +252,7 @@ int main(int argc, char **argv) {
         options config;
         for (int i = 1; i < argc; ++i) {
             std::string key = argv[i];
-            if (key == "--help") { std::cout << "Strata CPU: --model GGUF --alias ID --port 8088 --ctx-size 4096 --threads 2 --memory-mib 1536\nLoopback only; dense Qwen3 <=1.1B; no GPU/Python/AVX.\n"; return 0; }
+            if (key == "--help") { std::cout << "Strata CPU: --model GGUF --alias ID --port 8088 --ctx-size 4096 --threads 2 --memory-mib 1536\nLoopback only; Qwen2/Qwen3 <=1.1B or Granite hybrid <=1.6B within memory budget; no GPU/Python/AVX.\n"; return 0; }
             if (i + 1 == argc) throw std::runtime_error("missing value for " + key);
             std::string value = argv[++i];
             if (key == "--model") config.model = value;
@@ -247,8 +269,8 @@ int main(int argc, char **argv) {
         server.set_payload_max_length(2097152); server.set_read_timeout(10); server.set_write_timeout(10);
         server.Get("/health", [&](const auto &, auto &res) { res.set_content(cpu.health().dump(), "application/json"); });
         server.Get("/v1/models", [&](const auto &, auto &res) { res.set_content(json{{"object", "list"}, {"data", json::array({{{"id", config.alias}, {"object", "model"}, {"owned_by", "strata"}}})}}.dump(), "application/json"); });
-        server.Post("/apply-template", [](const auto &req, auto &res) {
-            try { res.set_content(json{{"prompt", template_prompt(json::parse(req.body).at("messages"))}}.dump(), "application/json"); }
+        server.Post("/apply-template", [&](const auto &req, auto &res) {
+            try { res.set_content(json{{"prompt", cpu.prompt(json::parse(req.body).at("messages"))}}.dump(), "application/json"); }
             catch (const std::exception &e) { error(res, 400, e.what()); }
         });
         server.Post("/tokenize", [&](const auto &req, auto &res) {
@@ -256,7 +278,7 @@ int main(int argc, char **argv) {
             catch (const std::exception &e) { error(res, 400, e.what()); }
         });
         server.Post("/prompt-count", [&](const auto &req, auto &res) {
-            try { res.set_content(json{{"count", cpu.tokenize(template_prompt(json::parse(req.body).at("messages"))).size()}}.dump(), "application/json"); }
+            try { res.set_content(json{{"count", cpu.tokenize(cpu.prompt(json::parse(req.body).at("messages"))).size()}}.dump(), "application/json"); }
             catch (const std::exception &e) { error(res, 400, e.what()); }
         });
         server.Post("/cancel", [&](const auto &, auto &res) { cpu.cancel(); res.set_content("{\"cancelled\":true}", "application/json"); });

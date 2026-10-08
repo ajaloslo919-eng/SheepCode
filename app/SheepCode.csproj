@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>SheepCode</AssemblyName>
-    <Version>0.4.1</Version>
+    <Version>0.5.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>sheep.ico</ApplicationIcon>
   </PropertyGroup>
@@ -15,12 +15,25 @@
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <PackageReference Include="Esprima" Version="3.0.6" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
     <Content Include="tts\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="skills\**\SKILL.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="validation\*.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="images\*.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="images\windows-ocr.ps1" LogicalName="SheepCode.windows-ocr.ps1" />
+    <Content Include="scenes\*.py" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="scenes\blender_inspect.py" LogicalName="SheepCode.blender-inspect.py" />
+    <EmbeddedResource Include="..\shared\vision-model.json" LogicalName="SheepCode.vision-model.json" />
+    <EmbeddedResource Include="..\shared\image-generation.json" LogicalName="SheepCode.image-generation.json" />
+    <Content Include="..\packaging\licenses\Python-3.12-PSF.txt" Link="licenses\Python-3.12-PSF.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\packaging\licenses\Esprima-BSD.txt" Link="licenses\Esprima-BSD.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\packaging\licenses\Roslyn-*" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\packaging\licenses\SD-*;..\packaging\licenses\SmolVLM-*" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\shared\*.cs" Link="Distribution\%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\shared\model-catalog.json" LogicalName="SheepCode.model-catalog.json" />
     <EmbeddedResource Include="..\shared\strata-cpu.json" LogicalName="SheepCode.strata-cpu.json" />

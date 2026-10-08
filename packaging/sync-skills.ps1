@@ -10,5 +10,5 @@ foreach ($skill in $catalog) {
     $text = $text.Replace('\n', [Environment]::NewLine)
     [IO.File]::WriteAllText((Join-Path $folder 'SKILL.md'), $text, [Text.UTF8Encoding]::new($false))
 }
-Write-Output "Skills adaptadas generadas: $($catalog.Count); las cuatro skills base se conservan."
+Write-Output "Skills adaptadas generadas: $($catalog.Count); las seis skills base (code, desktop, browser, models, images y scenes) se conservan."
 

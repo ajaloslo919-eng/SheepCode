@@ -23,6 +23,15 @@ internal static class Program
         }
         if (args.Contains("--self-test")) return Diagnostics.SelfTestAsync().GetAwaiter().GetResult();
         if (args.Contains("--protocol-check")) return ProtocolDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Contains("--code-review-check")) return CodeValidationDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Contains("--images-check")) return ImageDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Length == 2 && args[0] == "--vision-install") return VisualDiagnostics.InstallAsync(args[1]).GetAwaiter().GetResult();
+        if (args.Contains("--vision3d-check")) return VisualDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Length == 3 && args[0] == "--generation-install") return GenerationDiagnostics.InstallAsync(args[1], args[2]).GetAwaiter().GetResult();
+        if (args.Contains("--generation-check")) return GenerationDiagnostics.RunAsync().GetAwaiter().GetResult();
+        if (args.Contains("--generation-storage-check")) return GenerationDiagnostics.StorageCheck();
+        if (args.Contains("--generation-permissions-check")) return GenerationDiagnostics.PermissionCheckAsync().GetAwaiter().GetResult();
+        if (args.Contains("--generation-chat-check")) return GenerationDiagnostics.ChatReproAsync().GetAwaiter().GetResult();
         if (args.Contains("--workflow-check")) { ApplicationConfiguration.Initialize(); return WorkflowDiagnostics.Run(); }
         if (args.Contains("--laptop-check")) return PortableDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--cpu-check")) return CpuDiagnostics.RunAsync().GetAwaiter().GetResult();
@@ -38,6 +47,10 @@ internal static class Program
         var savedPreferenceBytes = File.Exists(Preferences.PathName) ? File.ReadAllBytes(Preferences.PathName) : null;
         var voice = new NeuralVoice(); var engine = new EngineHost(voice); var agent = new AgentController(engine, voice, preferences);
         using var form = new MainForm(preferences, voice, engine, agent);
+        if (args.Contains("--show-last-generated")) form.Shown += (_, _) => form.ShowLastGeneratedFromGui();
+        if (args.Contains("--images-ui-check")) form.Shown += async (_, _) => await ImageDiagnostics.GuiCheckAsync(form, agent, preferences);
+        if (args.Contains("--vision3d-ui-check")) form.Shown += async (_, _) => await VisualDiagnostics.GuiAsync(form, agent);
+        if (args.Contains("--generation-ui-check")) form.Shown += async (_, _) => await GenerationDiagnostics.GuiAsync(form, agent);
         if (args.Contains("--integrations-ui-check"))
         {
             form.Shown += async (_, _) =>
@@ -58,7 +71,7 @@ internal static class Program
                     {
                         form.Size = size; await Task.Delay(150); var state = form.ResponsiveSnapshot();
                         using var json = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(state));
-                        if (!json.RootElement.GetProperty("inputVisible").GetBoolean() || !json.RootElement.GetProperty("sendVisible").GetBoolean()) throw new IOException("El compositor quedó fuera de la ventana " + size);
+                        if (!json.RootElement.GetProperty("inputVisible").GetBoolean() || !json.RootElement.GetProperty("sendVisible").GetBoolean() || !json.RootElement.GetProperty("codeReviewVisible").GetBoolean()) throw new IOException("El compositor o la casilla de revisión quedaron fuera de la ventana " + size);
                         form.CaptureWindow(Path.Combine(AppPaths.Root, "checks", $"laptop-{size.Width}.png")); rows.Add(state);
                         if (size.Width == 1024) { form.ShowModelsPanel(); await Task.Delay(80); form.CaptureWindow(Path.Combine(AppPaths.Root, "checks", "laptop-models-1024.png")); form.ShowSkillPanel(); }
                     }
@@ -127,6 +140,15 @@ internal static class Program
         try
         {
             Application.Run(form);
+            if (args.Contains("--generation-ui-check"))
+            { using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppPaths.Root, "checks", "generation-gui.json"))); return report.RootElement.GetProperty("status").GetString() == "complete" ? 0 : 1; }
+            if (args.Contains("--vision3d-ui-check"))
+            { using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppPaths.Root, "checks", "vision3d-gui.json"))); return report.RootElement.GetProperty("status").GetString() == "complete" ? 0 : 1; }
+            if (args.Contains("--images-ui-check"))
+            {
+                using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppPaths.Root, "checks", "images-gui.json")));
+                return report.RootElement.GetProperty("status").GetString() == "complete" ? 0 : 1;
+            }
             if (args.Any(a => a is "--skills-check" or "--skills-agent-check"))
             {
                 var name = args.Contains("--skills-agent-check") ? "skills-agent.json" : "skills-components.json";
@@ -138,7 +160,7 @@ internal static class Program
         catch (Exception e) { File.WriteAllText(Path.Combine(AppPaths.Logs, "gui-error.log"), e.ToString()); MessageBox.Show(e.Message, "SheepCode"); return 1; }
         finally
         {
-            if (args.Any(a => a is "--ui-check" or "--ui-agent-check" or "--skills-check" or "--skills-agent-check" or "--laptop-ui-check" or "--integrations-ui-check"))
+            if (args.Any(a => a is "--ui-check" or "--ui-agent-check" or "--skills-check" or "--skills-agent-check" or "--laptop-ui-check" or "--integrations-ui-check" or "--images-ui-check" or "--vision3d-ui-check" or "--generation-ui-check"))
             { if (savedPreferenceBytes is not null) File.WriteAllBytes(Preferences.PathName, savedPreferenceBytes); else System.Text.Json.JsonSerializer.Deserialize<Preferences>(savedPreferences, AppPaths.Json)!.Save(); }
             engine.DisposeAsync().AsTask().GetAwaiter().GetResult(); voice.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }

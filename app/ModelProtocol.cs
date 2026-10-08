@@ -9,7 +9,10 @@ internal static class ModelProtocol
         ["list_skills"] = [], ["artifact_read"] = ["path"], ["artifact_propose"] = ["path", "format", "content", "skill"], ["git_read"] = ["operation"], ["project_backup"] = [], ["web_search"] = ["query"],
         ["mcp_status"] = [], ["mcp_tools"] = ["server"], ["mcp_call"] = ["server", "tool", "arguments", "skill"], ["automation_status"] = [], ["updater_status"] = [], ["check_updates"] = [],
         ["list_files"] = [], ["read_file"] = ["path"], ["search_files"] = ["query"], ["edit_file"] = ["path", "find", "replace"],
-        ["write_file"] = ["path", "content"], ["run_check"] = ["check"], ["finish"] = ["message"], ["use_skill"] = ["name"],
+        ["write_file"] = ["path", "content"], ["validate_code"] = ["path", "content"], ["validation_status"] = [], ["run_check"] = ["check"], ["finish"] = ["message"], ["use_skill"] = ["name"],
+        ["image_list"] = [], ["image_status"] = [], ["image_read"] = ["path"],
+        ["vision_status"] = [], ["image_analyze"] = ["path", "question"], ["scene_status"] = [], ["scene_list"] = [], ["scene_inspect"] = ["path"], ["scene_analyze"] = ["path", "question"],
+        ["image_generation_status"] = [], ["image_generate"] = ["prompt"],
         ["pc_windows"] = [], ["pc_read"] = [], ["pc_click"] = ["node"], ["pc_type"] = ["node", "text"],
         ["browser_tabs"] = [], ["browser_open"] = ["url"], ["browser_read"] = ["tab"], ["browser_click"] = ["tab", "node"],
         ["browser_fill"] = ["tab", "node", "text"], ["browser_back"] = ["tab"], ["browser_close"] = ["tab"], ["model_status"] = [], ["system_info"] = [], ["portable_status"] = [], ["performance_status"] = []
@@ -29,6 +32,8 @@ internal static class ModelProtocol
             var optionalNumbers = name switch {
                 "read_file" => new[] { "start_line", "line_count" }, "list_skills" => new[] { "start", "count" },
                 "browser_read" => new[] { "start", "text_length", "nodes_start", "node_count" }, _ => Array.Empty<string>() };
+            if (name == "image_read") optionalNumbers = ["start", "text_length"];
+            if (name == "scene_inspect") optionalNumbers = ["start", "count"];
             var optional = string.Concat(optionalNumbers.Select(s => " (\",\" ws " + Field(s, "integer") + ")?"));
             if (name == "search_files") optional += " (\",\" ws " + Field("path") + ")?";
             rules.Add("action-" + name.Replace('_', '-') + " ::= \"{\" ws " + string.Join(" \",\" ws ", fields) + optional + " \",\" ws " + Field("message") + " \"}\" ws");

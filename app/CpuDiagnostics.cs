@@ -25,12 +25,26 @@ internal static class CpuDiagnostics
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(4) };
             using var health = JsonDocument.Parse(await http.GetStringAsync(new Uri(EngineHost.Endpoint, "health"), timeout.Token));
             var data = health.RootElement;
-            if (data.GetProperty("backend").GetString() != "dense-cpu" || data.GetProperty("compiled_avx").GetInt32() != 0 || data.GetProperty("compiled_avx2").GetInt32() != 0 ||
+            var granite = engine.Profile.ModelId is "granite-4.0-h-350m" or "granite-4.0-h-1b";
+            if (data.GetProperty("backend").GetString() != (granite ? "hybrid-cpu" : "dense-cpu") || data.GetProperty("compiled_avx").GetInt32() != 0 || data.GetProperty("compiled_avx2").GetInt32() != 0 ||
                 data.GetProperty("max_context").GetInt32() != 4096 || data.GetProperty("threads").GetInt32() > 2 ||
                 data.GetProperty("q8_kernel").GetString() != "SSE2" || !data.GetProperty("q8_kernel_verified").GetBoolean()) throw new IOException("El motor activo no verificó CPU sin AVX, cálculo Q8 SSE2 y el presupuesto previsto.");
             using var status = JsonDocument.Parse(await agent.SubmitAsync("Estado del modelo", timeout.Token));
             if (status.RootElement.GetProperty("engine").GetProperty("lowMemoryCpu").GetProperty("memoryLimitMiB").GetInt32() != 1536) throw new IOException("La entrada compartida texto/dictado no informó del presupuesto.");
             report["health"] = data.Clone(); report["modelStatus"] = status.RootElement.Clone();
+            if (engine.Profile.ModelId == "granite-4.0-h-1b" && (data.GetProperty("quantization").GetString() != "Q4_K_M" ||
+                data.GetProperty("parameters").GetUInt64() < 1400000000UL || data.GetProperty("parameters").GetUInt64() > 1600000000UL))
+                throw new IOException("La arquitectura integrada no verificó el Granite de 1,5B Q4_K_M seleccionado.");
+            using var templateResponse = await http.PostAsync(new Uri(EngineHost.Endpoint, "apply-template"), new StringContent("{\"messages\":[{\"role\":\"assistant\",\"content\":\"{\\\"action\\\":\\\"finish\\\"}\"},{\"role\":\"user\",\"content\":\"hola\"}]}", Encoding.UTF8, "application/json"), timeout.Token);
+            using var templateData = JsonDocument.Parse(await templateResponse.Content.ReadAsStringAsync(timeout.Token));
+            var template = templateData.RootElement.GetProperty("prompt").GetString()!;
+            var qwen2 = engine.Profile.ModelId == "qwen2.5-coder-0.5b";
+            var expectedPrefix = granite ? "<|start_of_role|>assistant<|end_of_role|>" : qwen2 ? "<|im_start|>assistant\n" : "<|im_start|>assistant\n<think>\n\n</think>\n\n";
+            if (data.GetProperty("model").GetString() != engine.Profile.ModelId || data.GetProperty("architecture").GetString() != (granite ? "granitehybrid" : qwen2 ? "qwen2" : "qwen3") ||
+                template.Contains("<think>") != (!granite && !qwen2) || !template.EndsWith(expectedPrefix) ||
+                granite && (template.Contains("<|im_start|>") || data.GetProperty("chat_template").GetString() != "granite-4.0"))
+                throw new IOException("La plantilla del motor no corresponde al modelo seleccionado.");
+            report["template"] = new { matchesSelectedArchitecture = true, granite, qwen2ChatMl = qwen2, thinkingDisabled = true };
             var shortMessages = new List<object> { new { role = "user", content = "Responde solo con un objeto JSON que diga hola." } };
             using var counted = await http.PostAsync(new Uri(EngineHost.Endpoint, "prompt-count"), new StringContent(JsonSerializer.Serialize(new { messages = shortMessages }), Encoding.UTF8, "application/json"), timeout.Token);
             using var countData = JsonDocument.Parse(await counted.Content.ReadAsStringAsync(timeout.Token));
@@ -48,7 +62,15 @@ internal static class CpuDiagnostics
             using var second = await Generate(); var secondData = second.RootElement;
             var prefix = secondData.GetProperty("strata").GetProperty("cached_prompt_tokens").GetInt32();
             if (prefix < firstPrompt + firstData.GetProperty("usage").GetProperty("completion_tokens").GetInt32() - 1) throw new IOException("El siguiente paso descartó los tokens del asistente ya procesados.");
-            report["prefixReuse"] = new { first = firstData.Clone(), second = secondData.Clone(), exactCount = true, includesPreviousAssistant = true, scope = "Componente activo instalado, mismo Qwen3-0.6B; sin herramientas del agente ni GUI." };
+            report["prefixReuse"] = new { first = firstData.Clone(), second = secondData.Clone(), exactCount = true, includesPreviousAssistant = true, scope = "Componente activo instalado, modelo seleccionado " + engine.Profile.ModelId + "; sin herramientas del agente ni GUI." };
+            if (granite)
+            {
+                shortMessages.Clear(); shortMessages.Add(new { role = "user", content = "Responde solo un objeto JSON con la palabra nuevo." });
+                using var reset = await Generate();
+                if (reset.RootElement.GetProperty("strata").GetProperty("cached_prompt_tokens").GetInt32() != 0 ||
+                    data.GetProperty("prefix_cache_mode").GetString() != "append-or-reset") throw new IOException("El estado recurrente no se reinició al cambiar el historial.");
+                report["hybridHistoryReset"] = reset.RootElement.Clone();
+            }
             using var huge = new StringContent(JsonSerializer.Serialize(new { messages = new[] { new { role = "user", content = string.Join(' ', Enumerable.Repeat("hola", 5000)) } }, max_tokens = 512 }), Encoding.UTF8, "application/json");
             using var rejected = await http.PostAsync(new Uri(EngineHost.Endpoint, "v1/chat/completions"), huge, timeout.Token);
             var rejection = await rejected.Content.ReadAsStringAsync(timeout.Token);

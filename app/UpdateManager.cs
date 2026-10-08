@@ -9,7 +9,7 @@ internal sealed record UpdateRelease(string Tag, string Page, string SetupUrl, l
 internal sealed class UpdateManager : IDisposable
 {
     internal const string Repository = "ajaloslo919-eng/SheepCode";
-    internal const string CurrentVersion = "0.4.1";
+    internal const string CurrentVersion = "0.5.0";
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly bool _persist;

@@ -1,0 +1,15 @@
+{
+  "python": {
+    "version": "3.12.10",
+    "name": "python-3.12.10-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+    "sha256": "4ACBED6DD1C744B0376E3B1CF57CE906F9DC9E95E68824584C8099A63025A3C3",
+    "size": 11133606,
+    "release": "https://www.python.org/downloads/release/python-31210/",
+    "sigstoreDigest": "SsvtbdHHRLA3bjsc9XzpBvncnpXmiCRYTICZpjAlo8M=",
+    "license": "PSF-2.0"
+  },
+  "csharp": { "package": "Microsoft.CodeAnalysis.CSharp", "version": "4.14.0", "license": "MIT" },
+  "javascript": { "package": "Esprima", "version": "3.0.6", "license": "BSD-3-Clause" },
+  "scope": "Static syntax and explicit requested constructs. Candidate code is never executed. All model transports use the same gate."
+}

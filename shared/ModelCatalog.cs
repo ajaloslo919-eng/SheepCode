@@ -9,6 +9,7 @@ internal sealed record InstallPlan(string Id, string Label, string Kind, string 
 }
 internal static class ModelCatalog
 {
+    internal static bool CpuSupported(string id) => id is "qwen3-0.6b" or "qwen2.5-coder-0.5b" or "granite-4.0-h-350m" or "granite-4.0-h-1b";
     internal static IReadOnlyList<ModelAsset> Models
     {
         get
@@ -46,7 +47,7 @@ internal static class ModelCatalog
         // Total RAM describes the machine; available RAM is shown separately because existing apps may occupy it.
         var memoryBudget = MemoryBudget(hardware);
         var diskBudget = Math.Max(0, hardware.DiskFreeBytes - 3L * 1073741824);
-        var model = Models.OrderBy(m => m.Size).LastOrDefault(m => m.Size * 1.25 + 700_000_000 < memoryBudget && m.Size < diskBudget && (!battery || m.Size < 2_750_000_000))
+        var model = Models.Where(m => m.Id.StartsWith("qwen3-", StringComparison.Ordinal)).OrderBy(m => m.Size).LastOrDefault(m => m.Size * 1.25 + 700_000_000 < memoryBudget && m.Size < diskBudget && (!battery || m.Size < 2_750_000_000))
             ?? throw new IOException("No queda espacio o memoria para el modelo mínimo; libera al menos 4 GB de disco o instala solo el editor.");
         var context = hardware.Portable || battery || hardware.RamGiB < 7.5 ? 4096 : 8192;
         return new(model.Id, model.Label + (model.File.Contains("Q8") ? " · Q8" : " · Q4"), "llama",
@@ -60,11 +61,19 @@ internal static class ModelCatalog
     internal static InstallPlan Reuse(string root) => new("reuse-strata", "🐑 Reutilizar Strata ya instalado", "reuse", "Usa los pesos que ya están instalados. El perfil original conserva sus dos GPU y la voz RX 580. Mantiene los permisos de la instalación que se actualiza.", 0, 8192, ReuseRoot: root);
     internal static InstallPlan Strata() => new("strata-iq2-xs", "🐑 Strata · Qwen 3.8 Flash Next · IQ2_XS", "strata",
         "Para equipos con al menos 48 GB de RAM y una GPU compatible con 12 GB. Descarga y prepara el motor oficial; reserva 100 GB de disco. Las GPU del mismo backend pueden compartir el modelo. La mezcla RTX/RX antigua solo existe en el perfil original reutilizado.", 74L * 1073741824, 8192);
-    internal static InstallPlan LowMemory()
+    internal static InstallPlan LowMemory(string id = "qwen3-0.6b")
     {
-        var model = Models.First(m => m.Id == "qwen3-0.6b");
-        return new(model.Id, "🌱 Strata CPU · Qwen3-0.6B · Celeron / 4 GB", "strata-cpu",
-            "Backend del fork Strata para CPU x64, también sin AVX/AVX2. Modelo de 0,6B, contexto 4096, hasta 2 hilos y límite de memoria del motor de 1536 MiB. Sin servidor Python ni GPU; razonamiento oculto desactivado. Revisa sus propuestas pequeñas: este modelo tiene menor capacidad. Windows y las pestañas también necesitan RAM; cierra aplicaciones si el equipo está ocupado. La voz RX 580 de la instalación original conserva su perfil.", model.Size, 4096, model);
+        if (!CpuSupported(id)) throw new InvalidOperationException("Modelo fuera del catálogo Strata CPU de 4 GB.");
+        var model = Models.First(m => m.Id == id);
+        return new(model.Id, "🌱 Strata CPU · " + model.Label + " · Celeron / 4 GB" + (id.StartsWith("granite-", StringComparison.Ordinal) ? " · experimental" : ""), "strata-cpu",
+            "Backend del fork Strata para CPU x64, también sin AVX/AVX2. Modelo pequeño, contexto 4096, hasta 2 hilos y límite de memoria del motor de 1536 MiB. Sin servidor Python ni GPU; razonamiento oculto desactivado. " +
+            (id switch {
+                "granite-4.0-h-1b" => "Granite 4.0 H1B oficial de IBM: 1,5B parámetros, Q4_K_M y descarga de 901 MB. Arquitectura híbrida y plantilla Granite. Experimental: la creación y corrección del ejercicio Python con while fallaron. Revisa código y memoria antes de asumir que termina una tarea; la recomendación automática se conserva. ",
+                "granite-4.0-h-350m" => "Granite 4.0 H 350M Q8_0 oficial de IBM: arquitectura híbrida Mamba2/atención y plantilla Granite. Reutiliza historia continua; reinicia la caché si cambia el historial. Experimental: las pruebas detectaron código incorrecto. Revisa las propuestas; su tamaño no demuestra aciertos ni velocidad. ",
+                "qwen2.5-coder-0.5b" => "Qwen2.5-Coder usa su plantilla ChatML para código. Su especialización no demuestra aciertos ni velocidad; verifica las propuestas. ",
+                _ => "Revisa sus propuestas pequeñas: este modelo tiene menor capacidad. "
+            }) +
+            "Windows y las pestañas también necesitan RAM; cierra aplicaciones si el equipo está ocupado. La voz RX 580 de la instalación original conserva su perfil.", model.Size, 4096, model);
     }
     internal static InstallPlan EditorOnly() => new("editor-only", "🌸 Editor y código fuente · descargar el modelo después", "none", "Puedes editar proyectos y skills. La IA estará sin configurar hasta instalar un modelo en Modelos.", 0, 8192);
 }

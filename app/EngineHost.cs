@@ -6,17 +6,17 @@ using SheepCode.Distribution;
 
 namespace SheepCode;
 
-internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null, Process? ownedServer = null) : IAsyncDisposable
+internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null, Process? ownedServer = null, RuntimeProfile? transportProfile = null) : IAsyncDisposable
 {
     internal static Uri Endpoint => new($"http://127.0.0.1:{RuntimeProfile.Load(AppPaths.Root).Port}/");
-    internal RuntimeProfile Profile => RuntimeProfile.Load(AppPaths.Root);
+    internal RuntimeProfile Profile => transportProfile is null ? RuntimeProfile.Load(AppPaths.Root) : transport is not null ? transportProfile : throw new InvalidOperationException("El perfil simulado requiere un transporte inyectado.");
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly HttpClient _http = transport ?? new() { Timeout = TimeSpan.FromMinutes(20) };
     private Process? _server = ownedServer;
     private int? _reportedContext;
     private bool _tokenizerUnavailable;
     internal string State { get; private set; } = "Sin iniciar";
-    internal string Model { get; private set; } = RuntimeProfile.Load(AppPaths.Root).ModelId;
+    internal string Model { get; private set; } = transportProfile?.ModelId ?? RuntimeProfile.Load(AppPaths.Root).ModelId;
     internal object? LastGeneration { get; private set; }
     internal List<object> Generations { get; } = [];
     internal LaunchPolicy? ActiveLaunch { get; private set; }
@@ -36,7 +36,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
         }
         catch (Exception e) when (e is IOException or JsonException or ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { return null; }
     }
-    internal object Snapshot() => new { state = State, ready = Ready, model = Model, endpoint = Endpoint.ToString(),
+    internal object Snapshot() => new { state = State, ready = Ready, model = Ready ? Model : Profile.ModelId, endpoint = Endpoint.ToString(),
         profile = Profile.Kind, configured = Profile.Configured, configuredGpu = Profile.DeviceDescription,
         contextTokens = EffectiveContext, configuredContextTokens = Profile.Context, activeLaunch = ActiveLaunch, portable = PortableStatus(), rx580Execution = Profile.Kind == "strata-dual" ? Peer() : null,
         lowMemoryCpu = CpuMemory(), lastGeneration = LastGeneration, voice = voice.Snapshot(), automaticFallback = false };
@@ -67,6 +67,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
 
     internal async Task EnsureAsync(CancellationToken token)
     {
+        if (transportProfile is not null) throw new InvalidOperationException("El transporte simulado no puede iniciar motores.");
         await _gate.WaitAsync(token);
         try
         {
@@ -199,7 +200,10 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             if (!response.IsSuccessStatusCode) throw new HttpRequestException($"El motor respondió HTTP {(int)response.StatusCode}: {raw[..Math.Min(raw.Length, 500)]}");
             using var data = JsonDocument.Parse(raw);
             var choice = data.RootElement.GetProperty("choices")[0];
-            var text = choice.GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "";
+            var content = choice.GetProperty("message").GetProperty("content").GetString() ?? "";
+            // Hybrid recurrent caches require the exact generated token history.
+            // Trimming trailing JSON whitespace forces a full reset on the next tool step.
+            var text = Profile.Kind == "strata-cpu" ? content : content.Trim();
             var finish = choice.GetProperty("finish_reason").GetString();
             LastGeneration = new { seconds = clock.Elapsed.TotalSeconds, model = Model, finishReason = finish, reasoning,
                 contextTokens = EffectiveContext, outputBudget = limit, promptCompacted = !packed.SequenceEqual(messages),

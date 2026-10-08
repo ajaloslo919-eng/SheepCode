@@ -1,33 +1,29 @@
-# ⚡ Validación de SheepCode 0.4.1 · Qwen rápido
+# 🐑 Validación de SheepCode 0.5.0
 
-Trabajo del 6 de octubre de 2026. Se ejecuta exclusivamente Qwen3-0.6B Q8_0 seleccionado en la instalación propia de SheepCode. Los pesos conservan su SHA-256; no se ejecutan modelos candidatos ni otra IA.
+Esta release reúne revisión de código, adjuntos/OCR, visión local, inspección 3D y creación local de imágenes. Las verificaciones usan exclusivamente componentes seleccionados e instalados de SheepCode. Los fixtures de modelos, HTTP o hardware son deterministas y se distinguen de inferencia real; no se hacen comparativas con otras IAs.
 
-## Velocidad del flujo instalado
+## Creación de imágenes y contexto
 
-En el mismo PC de desarrollo Windows x64, Intel i5-12400F, RAM 64 GiB y perfil CPU de dos hilos, la creación de hello.py con una línea solicitada pasó de **94,06 s a 24,88 s**, aproximadamente **3,8 veces más rápida en esa comprobación**. Se incluyeron arranque del motor, inferencias, propuesta, aplicación humana del arnés y verificación del archivo. El motor usa CPU, no las GPU del equipo. Ambas versiones usan los mismos pesos Qwen3-0.6B; el resultado no predice la velocidad de un Celeron físico ni de tareas diferentes.
+El 8 de octubre se verificó en la instalación de Windows la entrada exacta «crea la imagen de un gato». SD-Turbo Q8 produjo un PNG real de 512 × 512, inspeccionado visualmente y verificado por SHA-256. El componente tardó 8,05 segundos en la RTX 2060 SUPER con texto auxiliar CPU. El agente no llamó al motor de código ni MCP; no alteró propuestas, opciones o permisos. Este tiempo no representa el rendimiento de escritura de código, voz o un Celeron físico.
 
-La versión optimizada completó write_file y finish sin reintentos: 339 tokens en la primera entrada y 62 de salida. El siguiente paso conservó 401 tokens en caché y evaluó 58 nuevos. Su prefill fue 2,06 s; la generación, 4,95 s. Estos tiempos son del **componente**, y excluyen herramientas, GUI y voz. La respuesta final de SheepCode informó correctamente que el cambio aún requería revisión, aunque el modelo describiera el archivo como creado.
+La integración se probó antes de cambiar el número de distribución a 0.5.0. También se verificaron 31 casos deterministas de variantes naturales, negaciones, citas, descripción ausente, generación/skill desactivada y reserva de contexto del perfil instalado Strata dual de 8192 tokens. Las mismas rutas sirven para texto y dictado aceptado. El contexto inicial no incorpora estados completos de vistas previas/adjuntos; carga una skill pertinente y mantiene las políticas de permisos y revisión.
 
-## Cambios integrados
+Tres regresiones del flujo con respuestas simuladas verificaron: lectura por fragmentos de una página larga en 4096 tokens y recuperación del HTTP 400 sin repetir la navegación; lectura previa del archivo Python y propuesta sin sobrescribir; botón Parar que cancela HTTP y el proceso auxiliar propio. Cuatro regresiones HTTP/JSON comprobaron reintentos acotados, content obligatorio y campos al nivel superior.
 
-- Producto Q8 firmado mediante SSE2, sin AVX, duplicación de pesos ni cambio de cuantización. Al cargar, se verifica contra una suma escalar, incluidos -128, escalas y bloques impares.
-- Conserva el prefijo no pensante del asistente entre pasos para reutilizar también sus tokens generados.
-- Conteo exacto con /prompt-count; valida el contexto antes de inferir y conserva reserva para la salida.
-- Gramática de acciones generada desde el registro de herramientas: campos requeridos al nivel superior. La validación, permisos y revisión humana siguen en SheepCode.
-- Modo rápido activado por defecto: instrucciones breves, las 55 skills disponibles a demanda, rutas relativas, prelectura del archivo abierto mencionado y salida inicial de 512 tokens con reintentos acotados hasta 1536.
-- Estado y configuración disponibles en capabilities, performance_status, la casilla ⚡ Qwen rápido y las órdenes humanas compartidas por texto y dictado aceptado. La skill models desactivada bloquea su configuración.
-- El setup actualiza el runtime estándar Strata CPU incluso al actualizar solo app/source: verifica paquete y ejecutable, respalda el anterior y conserva perfil, pesos y voz. Respeta runtimes con ruta personalizada.
+## Otras funciones integradas
 
-## CPU antigua y memoria
+Las comprobaciones del 7 de octubre separadas de la generación cubrieron 28 casos de adjuntos/OCR y permisos, 20 de visión/3D (componente SmolVLM 500M instalado y Blender), cuatro tamaños de GUI para visión/3D y cuatro para el generador, y 48 de revisión sintáctica/requisitos explícitos. Las respuestas del motor de código en las pruebas del agente son simuladas; la revisión Python usa AST y no ejecuta el código candidato. No se infiere rendimiento o calidad de los modelos opcionales de esos fixtures.
 
-El código actualizado completa una respuesta JSON bajo QEMU TCG, CPU Conroe/Celeron 4x0, dos CPU virtuales, **4096 MiB y sin AVX**, usando el modelo seleccionado en SheepCode. La salud confirma cálculo SSE2 verificado, contexto 4096, dos hilos y presupuesto 1536 MiB. Memoria residente observada **1198 MiB**, espacio virtual **1398 MiB** y aproximadamente **2580 MiB disponibles** en el invitado, sin swap. Esta prueba verifica el componente y compatibilidad de memoria/instrucciones; no mide velocidad física ni incluye una GUI Windows en la VM.
+Granite 4.0 H350M y H1B (1.5B) son alternativas manuales experimentales; el catálogo no promete que completen una tarea. Qwen2.5 Coder sigue siendo una opción manual. Las pruebas históricas del perfil Qwen se conservan en [VALIDACION-0.4.1.md](VALIDACION-0.4.1.md), con sus límites y fallos explícitos.
 
-Windows limita memoria privada con un Job Object; Linux limita espacio virtual. Las páginas mapeadas no se contabilizan igual. Windows, GUI, herramientas y pestañas consumen RAM adicional.
+## Distribución y límites
 
-## Comprobaciones y límites
+El setup incluye runtime privado de .NET, editor, 57 skills locales/adaptadas, analizadores y código editable. El modelo de código elegido se descarga por revisión y SHA-256; visión y generación se instalan mediante controles humanos. SD-Turbo requiere unos 2,02 GB de pesos y al menos 8 GB de RAM. La visión es aproximada; FBX/BLEND necesitan Blender instalado y solo muestran geometría base; Unity YAML no ejecuta el juego. El generador no garantiza texto, transparencia, anatomía ni cantidades.
 
-Las comprobaciones de flujo controlado separan respuestas simuladas de inferencias reales. Verifican prelectura antes de inferir, conservación de una edición concurrente, propuestas sin guardar, activación/desactivación humana, citas literales y bloqueo por skill desactivada. El componente real verifica conteo exacto, caché del asistente, contexto excesivo, cancelación nativa y detención de su proceso propio.
+La actualización respaldó la app y el estado de la instalación usada para la integración. Se verificaron los hashes de preferencias, modelos/configuración, componentes visuales y TTS; la búsqueda automática solo renovó su caché al reabrir. La voz neuronal original de la RX 580 conserva configuración e identidad; esta release no atribuye una nueva prueba de síntesis de voz. Las instalaciones sin ese paquete informan «sin configurar».
 
-El programa de saludos con while **no está verificado en esta versión**: la primera inferencia excedió el límite de tres minutos de esa comprobación y se detuvo su proceso de prueba. No se aplicó ni ejecutó el programa ni se presenta el XLSX posterior como un éxito. La prueba 0.4.0 tampoco pasó ese programa; su informe queda en VALIDACION-0.4.0.md. Acelerar este modelo básico no garantiza que resuelva tareas complejas: revisar el diff y ejecutar comprobaciones autorizadas.
+Los modelos, archivos, webs y skills no pueden ampliar permisos ni aplicar propuestas. Guardar PNG y aplicar código siguen siendo decisiones humanas. Los paquetes tienen manifiestos de integridad; el setup no tiene firma Authenticode propia. Las licencias de pesos y dependencias se incluyen aparte de la licencia del código.
 
-El perfil original de dos GPU y su voz neuronal expresiva RX 580 conservan archivos, ajustes e identidad; no se atribuye una nueva síntesis a esta comprobación. El setup mantiene fuentes editables y actualización por SHA-256. No tiene firma Authenticode propia. Las pruebas históricas del modelo grande permanecen separadas en VALIDACION-0.3.0.md.
+## Paquete 0.5.0
+
+El setup nativo compiló sin advertencias ni errores y realizó una instalación limpia aislada, sin descargar ni ejecutar modelos. Se verificaron su versión, el binario instalado, 57 skills, 177 archivos de código editable y el Python privado de revisión. Pasaron 17 comprobaciones del setup, 10 de la app, 18 del catálogo/artefactos/MCP/actualizador, 48 de revisión, 31 de rutas de generación/permisos/contexto, cuatro de protocolo y tres del flujo con servidor/tokenizador simulados. El perfil del transporte simulado está separado del perfil instalado y no puede iniciar motores.
