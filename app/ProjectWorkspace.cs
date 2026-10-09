@@ -19,7 +19,7 @@ internal sealed class ProjectWorkspace
     internal ProjectWorkspace(string root)
     {
         Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-        if (!Directory.Exists(Root)) throw new DirectoryNotFoundException("No existe la carpeta del proyecto.");
+        if (!Directory.Exists(Root)) throw new DirectoryNotFoundException("No existe la carpeta del proyecto: " + Root + ". Elige una carpeta existente desde Proyecto. Esta carpeta es distinta de los pesos de IA.");
         CheckLinks(Root);
     }
     internal string Resolve(string relative, bool directory = false)

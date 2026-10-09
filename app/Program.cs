@@ -21,6 +21,7 @@ internal static class Program
             try { using var updater = new UpdateManager(); var message = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult(); AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "updater-live.json"), new { status = "complete", message, state = updater.Status(), scope = "Consulta HTTP real de la última release pública de SheepCode; sin instalar ni ejecutar IA." }); return 0; }
             catch (Exception e) { AppPaths.SaveJson(Path.Combine(AppPaths.Root, "checks", "updater-live.json"), new { status = "failed", error = e.Message }); return 1; }
         }
+        if (args.Contains("--model-installation-check")) return ModelDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--self-test")) return Diagnostics.SelfTestAsync().GetAwaiter().GetResult();
         if (args.Contains("--protocol-check")) return ProtocolDiagnostics.RunAsync().GetAwaiter().GetResult();
         if (args.Contains("--code-review-check")) return CodeValidationDiagnostics.RunAsync().GetAwaiter().GetResult();
@@ -47,6 +48,7 @@ internal static class Program
         var savedPreferenceBytes = File.Exists(Preferences.PathName) ? File.ReadAllBytes(Preferences.PathName) : null;
         var voice = new NeuralVoice(); var engine = new EngineHost(voice); var agent = new AgentController(engine, voice, preferences);
         using var form = new MainForm(preferences, voice, engine, agent);
+        if (args.Contains("--model-panel-check")) form.Shown += async (_, _) => await ModelDiagnostics.GuiAsync(form, agent, engine);
         if (args.Contains("--show-last-generated")) form.Shown += (_, _) => form.ShowLastGeneratedFromGui();
         if (args.Contains("--images-ui-check")) form.Shown += async (_, _) => await ImageDiagnostics.GuiCheckAsync(form, agent, preferences);
         if (args.Contains("--vision3d-ui-check")) form.Shown += async (_, _) => await VisualDiagnostics.GuiAsync(form, agent);
@@ -140,6 +142,8 @@ internal static class Program
         try
         {
             Application.Run(form);
+            if (args.Contains("--model-panel-check"))
+            { using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppPaths.Root, "checks", "model-panel.json"))); return report.RootElement.GetProperty("status").GetString() == "complete" ? 0 : 1; }
             if (args.Contains("--generation-ui-check"))
             { using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppPaths.Root, "checks", "generation-gui.json"))); return report.RootElement.GetProperty("status").GetString() == "complete" ? 0 : 1; }
             if (args.Contains("--vision3d-ui-check"))

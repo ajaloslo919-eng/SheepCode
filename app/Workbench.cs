@@ -74,30 +74,35 @@ internal sealed partial class MainForm
         web.Controls.Add(Flow(back, read, close), 0, 1); web.Controls.Add(_webTabs, 0, 2); web.Controls.Add(_webInfo, 0, 3); browser.Controls.Add(web);
         _browserTools.Changed += () => Ui(() => { if (_webTabs.SelectedTab?.Controls.OfType<Microsoft.Web.WebView2.WinForms.WebView2>().FirstOrDefault() is { } current) _address.Text = current.Source?.AbsoluteUri ?? ""; _webInfo.Text = "🌐 " + _webTabs.TabCount + " pestaña(s) · pide a Sheep leer o actuar aquí"; });
 
-        var models = NewPage("Modelos"); models.AutoScroll = true; var model = Stack(80, 52, 52, 52, 52, 48, -1); model.Padding = new(10); model.Dock = DockStyle.Top; model.Height = 632;
-        var title = LabelFor("🧠 El cerebro local de Sheep\nTu modelo, sus gráficas y las opciones de instalación\nEl perfil original conserva Strata + RX 580 🌸", 12); title.ForeColor = Accent; model.Controls.Add(title, 0, 0);
+        FlowLayoutPanel ModelRow(params Control[] controls) { var row = Flow(controls); row.Padding = new(4, 0, 4, 0); return row; }
+        var models = NewPage("Modelos"); models.AutoScroll = true; var model = Stack(160, 52, 52, 52, 52, 48); model.Padding = new(10); model.Dock = DockStyle.Top; model.Height = 436;
+        _modelText.WordWrap = true; _modelText.Font = new("Consolas", 10); model.Controls.Add(_modelText, 0, 0);
         Button load = ButtonFor("✨ Cargar IA", true), unload = ButtonFor("⏸ Liberar"), status = ButtonFor("↻ Estado");
-        load.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Activa el motor", token); RefreshModels(); });
+        load.Click += (_, _) => StartTask(async token => { try { await _agent.SubmitAsync("Activa el motor", token); } finally { RefreshModels(); } });
         unload.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Desactiva el motor", token); RefreshModels(); }); status.Click += (_, _) => Guard(RefreshModels);
-        Button analyze = ButtonFor("💻 Analizar"), install = ButtonFor("🌸 Instalar recomendación");
+        Button analyze = ButtonFor("💻 Analizar"), install = ButtonFor("🌸 Instalar");
         analyze.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Analiza el sistema", token); });
-        install.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala el modelo recomendado", token); RefreshModels(); });
-        model.Controls.Add(Flow(load, unload, status), 0, 1); model.Controls.Add(Flow(analyze, install), 0, 2);
+        install.Click += (_, _) => StartTask(async token => { try { await _agent.SubmitAsync("Instala el modelo recomendado", token); } finally { RefreshModels(); } });
+        Button copyDiagnosis = ButtonFor("📋 Copiar");
+        copyDiagnosis.Click += (_, _) => Guard(() => { _agent.Skills.Require("models"); Clipboard.SetText(JsonSerializer.Serialize(_agent.ModelStatus(), AppPaths.Json)); AppendChat("assistant", "🐱 Diagnóstico del modelo copiado. Incluye el perfil seleccionado, archivos, rutas y último error de carga."); });
+        model.Controls.Add(ModelRow(load, unload, status, copyDiagnosis), 0, 1); Button repair = ButtonFor("🧰 Reparar");
+        repair.Click += (_, _) => StartTask(async token => { try { await _agent.SubmitAsync("Repara el motor", token); } finally { RefreshModels(); } });
+        model.Controls.Add(ModelRow(analyze, install, repair), 0, 2);
         Button coder = ButtonFor("🐑 Qwen2.5-Coder"), granite = ButtonFor("🌱 Granite 350M"), granite1b = ButtonFor("🌷 Granite 1.5B"), restore = ButtonFor("↶ Perfil anterior");
         coder.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala Qwen2.5-Coder", token); RefreshModels(); RefreshSettings(); });
         granite.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala Granite 4.0", token); RefreshModels(); RefreshSettings(); });
         granite1b.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Instala Granite 1.5B", token); RefreshModels(); RefreshSettings(); });
         restore.Click += (_, _) => StartTask(async token => { await _agent.SubmitAsync("Restaura el perfil anterior", token); RefreshModels(); RefreshSettings(); });
-        var modelTip = new ToolTip(); modelTip.SetToolTip(coder, "Instala y selecciona el modelo oficial 0.5B Instruct Q8_0 en Strata CPU, con descarga verificada. Conserva el perfil anterior. Revisa el código generado.");
+        var modelTip = new ToolTip(); modelTip.SetToolTip(copyDiagnosis, "Copiar el diagnóstico completo: modelo seleccionado, rutas y último error."); modelTip.SetToolTip(install, "Instalar y seleccionar el modelo recomendado para este equipo."); modelTip.SetToolTip(repair, "Restaurar el runtime nativo seleccionado desde el paquete local; no descarga pesos ni cambia el perfil."); modelTip.SetToolTip(coder, "Instala y selecciona el modelo oficial 0.5B Instruct Q8_0 en Strata CPU, con descarga verificada. Conserva el perfil anterior. Revisa el código generado.");
         modelTip.SetToolTip(granite, "Opción experimental: Granite 4.0 H 350M Q8_0 oficial de IBM en Strata CPU. Descarga verificada, contexto 4096 y perfil anterior conservado. Las pruebas detectaron código incorrecto; revisa las propuestas.");
         modelTip.SetToolTip(granite1b, "Opción experimental: Granite 4.0 H1B de IBM, 1.5B parámetros, Q4_K_M de 901 MB. Descarga verificada, contexto 4096 y presupuesto 1536 MiB. Las pruebas de creación y corrección de código fallaron. Conserva el perfil anterior; revisa las propuestas.");
-        model.Controls.Add(Flow(granite1b, restore), 0, 3); model.Controls.Add(Flow(coder, granite), 0, 4);
+        model.Controls.Add(ModelRow(granite1b, restore), 0, 3); model.Controls.Add(ModelRow(coder, granite), 0, 4);
         _powerMode.Items.AddRange(["🔋 Automático", "🌱 Ahorro", "⚡ Perfil completo"]);
         StyleCombo(_powerMode);
         _powerMode.SelectedIndexChanged += (_, _) => { if (_refreshingSettings || _powerMode.SelectedIndex < 0) return; var command = _powerMode.SelectedIndex switch { 0 => "Modo portátil automático", 1 => "Activa el modo ahorro", _ => "Desactiva el modo ahorro" }; StartTask(async token => { try { await _agent.SubmitAsync(command, token); } finally { RefreshSettings(); RefreshModels(); } }); };
         var powerLabel = LabelFor("💻 Energía", 10); powerLabel.Dock = DockStyle.None; powerLabel.Width = 94; powerLabel.Height = 34;
-        model.Controls.Add(Flow(powerLabel, _powerMode), 0, 5);
-        _modelText.WordWrap = true; _modelText.Font = new("Consolas", 10); model.Controls.Add(_modelText, 0, 6); models.Controls.Add(model);
+        model.Controls.Add(ModelRow(powerLabel, _powerMode), 0, 5);
+        models.Controls.Add(model);
         _tabs.TabPages.Add(_compactFiles);
         _modelTimer.Interval = 5000; _modelTimer.Tick += async (_, _) => { _engine.RefreshPowerPriority(); if (_tabs.SelectedIndex == 6) RefreshModels(); RunDueAutomation(); await AutoCheckUpdateAsync(); }; _modelTimer.Start(); RefreshModels();
     }
@@ -105,9 +110,21 @@ internal sealed partial class MainForm
     private void OpenWeb() { var url = _address.Text.Trim(); StartTask(async token => { await _browserTools.OpenAsync(url, token); }); }
     private void RefreshModels()
     {
-        _modelText.Text = "💻 " + SheepCode.Distribution.PowerScanner.Read().Describe() + " · modo " + _preferences.PortableMode + "\nPerfil integrado: " + _engine.Profile.Kind + "\nRazonamiento: " + _preferences.Reasoning + " (ajústalo en el chat)\n" +
-            "Motor: " + _engine.State + "\nVoz: " + _voice.State + "\n\nTelemetría y configuración real:\n" + JsonSerializer.Serialize(_agent.ModelStatus(), AppPaths.Json);
+        var profile = _engine.Profile; var installation = _engine.InstallationStatus();
+        var state = _engine.Ready ? "🐑 IA cargada y lista" : !profile.Configured ? "🌱 Sin modelo seleccionado" :
+            !installation.FilesReady ? "⚠ Instalación incompleta" : _engine.LastLoadError is not null ? "⚠ Falló el arranque" :
+            "🌷 Archivos presentes · pulsa Cargar IA";
+        var text = "🧠 Modelo seleccionado: " + profile.Label + "\n" + state + "\nMotor: " + _engine.State +
+            "\nPerfil integrado: " + profile.Kind + "\n\n" + (_engine.LastLoadError is { } error ? "⚠ Último error de carga:\n" + error : installation.Message);
+        foreach (var file in installation.Files) text += "\n\n" + (file.Present && file.SizeMatches != false ? "✓ " : "⚠ ") + file.Name + ":\n" + (file.Path.Length == 0 ? "sin configurar" : file.Path);
+        text += "\n\n💻 " + SheepCode.Distribution.PowerScanner.Read().Describe() + " · modo " + _preferences.PortableMode +
+            "\nVoz: " + _voice.State + "\n\n📋 Copiar diagnóstico incluye el estado completo.\nEl catálogo enumera opciones; no indica que todas estén instaladas o recomendadas.";
+        if (_modelText.Text == text) return;
+        _modelText.Text = text; _modelText.Select(0, 0); _modelText.ScrollToCaret();
     }
+    internal string ModelPanelText() => _modelText.Text;
+    internal void RefreshModelPanel() => RefreshModels();
+    internal bool ModelSummaryVisible() => _modelText.Visible && _modelText.Parent?.Parent is { } page && page.RectangleToScreen(page.ClientRectangle).Contains(new Rectangle(_modelText.PointToScreen(Point.Empty), new Size(_modelText.Width, Math.Min(70, _modelText.Height))));
     private void RefreshSkills()
     {
         _skillCount.Text = "🧩 " + _agent.Skills.Items.Count + " habilidades para Sheep & Kuky\nHerramientas locales, flujos de código y proveedores MCP configurables 🌸";

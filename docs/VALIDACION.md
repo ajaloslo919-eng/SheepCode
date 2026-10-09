@@ -1,29 +1,17 @@
-# 🐑 Validación de SheepCode 0.5.0
+# 🐑 Validación de SheepCode 0.5.1
 
-Esta release reúne revisión de código, adjuntos/OCR, visión local, inspección 3D y creación local de imágenes. Las verificaciones usan exclusivamente componentes seleccionados e instalados de SheepCode. Los fixtures de modelos, HTTP o hardware son deterministas y se distinguen de inferencia real; no se hacen comparativas con otras IAs.
+Esta versión corrige la presentación del modelo seleccionado y la reparación del runtime nativo. Se verifican archivos y herramientas de SheepCode; no se ejecutan otros modelos, candidatos ni comparativas de IA.
 
-## Creación de imágenes y contexto
+## Diagnóstico y reparación
 
-El 8 de octubre se verificó en la instalación de Windows la entrada exacta «crea la imagen de un gato». SD-Turbo Q8 produjo un PNG real de 512 × 512, inspeccionado visualmente y verificado por SHA-256. El componente tardó 8,05 segundos en la RTX 2060 SUPER con texto auxiliar CPU. El agente no llamó al motor de código ni MCP; no alteró propuestas, opciones o permisos. Este tiempo no representa el rendimiento de escritura de código, voz o un Celeron físico.
+Las 21 comprobaciones deterministas verifican: equipo sin perfil, catálogo sin pesos, descarga parcial y archivo de tamaño distinto; directorio de runtime ausente y causa exacta conservada; diagnóstico por el diálogo compartido y capacidades registradas; carpeta de proyecto diferenciada de pesos; comandos citados y skill desactivada; respeto de runtimes personalizados; reparación CPU y Vulkan desde los ZIP realmente distribuidos; recuperación de CRT y DLL incompletas; reparación del perfil seleccionado durante una actualización; respaldo, rechazo de SHA-256 inválido, cancelación y conservación de perfil, permisos y bytes de pesos.
 
-La integración se probó antes de cambiar el número de distribución a 0.5.0. También se verificaron 31 casos deterministas de variantes naturales, negaciones, citas, descripción ausente, generación/skill desactivada y reserva de contexto del perfil instalado Strata dual de 8192 tokens. Las mismas rutas sirven para texto y dictado aceptado. El contexto inicial no incorpora estados completos de vistas previas/adjuntos; carga una skill pertinente y mantiene las políticas de permisos y revisión.
+Los archivos de pesos son fixtures de texto que no pueden ejecutarse. Se extraen los runtimes reales CPU/Vulkan, pero no se lanzan para inferencia, no se descargan modelos y no se cambia el backend de voz. Presencia y tamaño no prueban SHA-256 de los pesos ni que el modelo esté cargado; `engine.ready` informa del proceso activo.
 
-Tres regresiones del flujo con respuestas simuladas verificaron: lectura por fragmentos de una página larga en 4096 tokens y recuperación del HTTP 400 sin repetir la navegación; lectura previa del archivo Python y propuesta sin sobrescribir; botón Parar que cancela HTTP y el proceso auxiliar propio. Cuatro regresiones HTTP/JSON comprobaron reintentos acotados, content obligatorio y campos al nivel superior.
+La GUI se comprueba a 1024 × 650 y 1520 × 900 en una instalación aislada sin IA seleccionada: el resumen está arriba, muestra el fallo y no repite el catálogo. El modelo elegido y la inferencia del dispositivo remoto del usuario todavía requieren comprobarse en ese equipo.
 
-## Otras funciones integradas
+## Regresiones
 
-Las comprobaciones del 7 de octubre separadas de la generación cubrieron 28 casos de adjuntos/OCR y permisos, 20 de visión/3D (componente SmolVLM 500M instalado y Blender), cuatro tamaños de GUI para visión/3D y cuatro para el generador, y 48 de revisión sintáctica/requisitos explícitos. Las respuestas del motor de código en las pruebas del agente son simuladas; la revisión Python usa AST y no ejecuta el código candidato. No se infiere rendimiento o calidad de los modelos opcionales de esos fixtures.
+Se verifican las 10 comprobaciones de herramientas de proyecto y permisos, y las tres regresiones de flujo con respuestas HTTP deterministas (contexto 4096, lectura previa de archivos y cancelación real del proceso propio y HTTP). Los fixtures no son inferencia ni una medida de rendimiento de SheepCode.
 
-Granite 4.0 H350M y H1B (1.5B) son alternativas manuales experimentales; el catálogo no promete que completen una tarea. Qwen2.5 Coder sigue siendo una opción manual. Las pruebas históricas del perfil Qwen se conservan en [VALIDACION-0.4.1.md](VALIDACION-0.4.1.md), con sus límites y fallos explícitos.
-
-## Distribución y límites
-
-El setup incluye runtime privado de .NET, editor, 57 skills locales/adaptadas, analizadores y código editable. El modelo de código elegido se descarga por revisión y SHA-256; visión y generación se instalan mediante controles humanos. SD-Turbo requiere unos 2,02 GB de pesos y al menos 8 GB de RAM. La visión es aproximada; FBX/BLEND necesitan Blender instalado y solo muestran geometría base; Unity YAML no ejecuta el juego. El generador no garantiza texto, transparencia, anatomía ni cantidades.
-
-La actualización respaldó la app y el estado de la instalación usada para la integración. Se verificaron los hashes de preferencias, modelos/configuración, componentes visuales y TTS; la búsqueda automática solo renovó su caché al reabrir. La voz neuronal original de la RX 580 conserva configuración e identidad; esta release no atribuye una nueva prueba de síntesis de voz. Las instalaciones sin ese paquete informan «sin configurar».
-
-Los modelos, archivos, webs y skills no pueden ampliar permisos ni aplicar propuestas. Guardar PNG y aplicar código siguen siendo decisiones humanas. Los paquetes tienen manifiestos de integridad; el setup no tiene firma Authenticode propia. Las licencias de pesos y dependencias se incluyen aparte de la licencia del código.
-
-## Paquete 0.5.0
-
-El setup nativo compiló sin advertencias ni errores y realizó una instalación limpia aislada, sin descargar ni ejecutar modelos. Se verificaron su versión, el binario instalado, 57 skills, 177 archivos de código editable y el Python privado de revisión. Pasaron 17 comprobaciones del setup, 10 de la app, 18 del catálogo/artefactos/MCP/actualizador, 48 de revisión, 31 de rutas de generación/permisos/contexto, cuatro de protocolo y tres del flujo con servidor/tokenizador simulados. El perfil del transporte simulado está separado del perfil instalado y no puede iniciar motores.
+La distribución conserva el código editable y los paquetes fijados. Las evidencias de imágenes, visión/3D, validación de código y límites de la versión anterior están en [VALIDACION-0.5.0.md](VALIDACION-0.5.0.md); no se presentan como pruebas nuevas. La voz neuronal RX 580 no se sustituye ni se declara nuevamente verificada en este arreglo.

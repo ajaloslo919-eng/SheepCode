@@ -34,6 +34,72 @@ internal static class ModelProvisioner
         SafeFiles.Child(root, @"runtime\strata-cpu\strata-cpu.exe"); File.Move(replacement, executable, true);
         return executable;
     }
+    private static async Task<string> InstallLlamaRuntimeAsync(string root, bool vulkan, IProgress<InstallProgress>? progress, CancellationToken token)
+    {
+        using var metadata = JsonDocument.Parse(typeof(ModelProvisioner).Assembly.GetManifestResourceStream("SheepCode.native-runtime.json") ?? throw new IOException("Falta el catálogo del runtime nativo."));
+        var asset = metadata.RootElement.GetProperty(vulkan ? "vulkan" : "cpu");
+        var package = SafeFiles.Child(root, Path.Combine("runtime", "packages", asset.GetProperty("file").GetString()!));
+        if (!File.Exists(package)) throw new FileNotFoundException("Falta el paquete local del motor: " + package + ". Reinstala el setup; no hace falta volver a descargar los pesos.", package);
+        if (!(await SafeFiles.HashAsync(package, token)).Equals(asset.GetProperty("sha256").GetString(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("El paquete del runtime no coincide con SHA-256: " + package);
+        var runtime = SafeFiles.Child(root, @"runtime\llama");
+        string[] entries; bool complete;
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(package))
+        {
+            entries = archive.Entries.Where(e => !e.FullName.EndsWith('/')).Select(e => e.FullName).ToArray();
+            complete = archive.Entries.Where(e => !e.FullName.EndsWith('/')).All(e =>
+            { var file = SafeFiles.Child(runtime, e.FullName); return File.Exists(file) && new FileInfo(file).Length == e.Length; });
+        }
+        if (!complete)
+        {
+            progress?.Report(new("Restaurando runtime nativo", (vulkan ? "Vulkan" : "CPU") + " · paquete local verificado; pesos y perfil conservados"));
+            var backup = SafeFiles.Child(root, @"backups\before-native-runtime-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
+            var preserved = new List<object>();
+            foreach (var entry in entries)
+            {
+                token.ThrowIfCancellationRequested(); var file = SafeFiles.Child(runtime, entry);
+                if (!File.Exists(file)) continue;
+                var relative = Path.GetRelativePath(root, file); var copy = SafeFiles.Child(backup, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(copy)!); File.Copy(file, copy);
+                preserved.Add(new { path = relative, sha256 = await SafeFiles.HashAsync(copy, token) });
+            }
+            if (preserved.Count > 0) DistributionJson.Save(Path.Combine(backup, "manifest.json"), preserved);
+            SafeFiles.ExtractZip(package, runtime, token);
+        }
+        var app = SafeFiles.Child(root, "app");
+        if (Directory.Exists(app)) foreach (var crt in Directory.EnumerateFiles(app, "*140*.dll"))
+        {
+            var target = SafeFiles.Child(runtime, Path.GetFileName(crt));
+            if (File.Exists(target) && (await SafeFiles.HashAsync(target, token)).Equals(await SafeFiles.HashAsync(crt, token), StringComparison.OrdinalIgnoreCase)) continue;
+            if (File.Exists(target))
+            {
+                var copy = SafeFiles.Child(root, @"backups\before-native-crt-" + Guid.NewGuid().ToString("N") + "\\" + Path.GetFileName(crt));
+                Directory.CreateDirectory(Path.GetDirectoryName(copy)!); File.Copy(target, copy);
+            }
+            File.Copy(crt, target, true);
+        }
+        var executable = SafeFiles.Child(runtime, "llama-server.exe");
+        if (!File.Exists(executable)) throw new FileNotFoundException("El paquete no contiene el ejecutable esperado: " + executable);
+        return executable;
+    }
+    private static async Task RefreshSelectedRuntimeAsync(string root, RuntimeProfile profile, IProgress<InstallProgress>? progress, CancellationToken token)
+    {
+        if (!profile.NativeExecutable) return;
+        var standard = SafeFiles.Child(root, profile.Kind == "strata-cpu" ? @"runtime\strata-cpu\strata-cpu.exe" : @"runtime\llama\llama-server.exe");
+        if (!InstallationPaths.Resolve(root, profile.Executable).Equals(standard, StringComparison.OrdinalIgnoreCase))
+        { progress?.Report(new("Conservando motor personalizado", "El runtime usa otra ruta; no se sobrescribe automáticamente: " + profile.Executable)); return; }
+        if (profile.Kind == "strata-cpu") await InstallCpuRuntimeAsync(root, progress, token);
+        else await InstallLlamaRuntimeAsync(root, profile.Devices != "none" || profile.GpuLayers > 0, progress, token);
+    }
+    internal static async Task<RuntimeProfile> RepairRuntimeAsync(string root, IProgress<InstallProgress>? progress, CancellationToken token)
+    {
+        var profile = RuntimeProfile.Load(root);
+        if (!profile.NativeExecutable) throw new InvalidOperationException("La reparación local requiere un perfil nativo seleccionado. Usa el setup para configurar el modelo o reparar Strata.");
+        var standard = SafeFiles.Child(root, profile.Kind == "strata-cpu" ? @"runtime\strata-cpu\strata-cpu.exe" : @"runtime\llama\llama-server.exe");
+        if (!InstallationPaths.Resolve(root, profile.Executable).Equals(standard, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("El motor seleccionado usa una ruta personalizada; no se modifica: " + profile.Executable + ". Restaura ese runtime o reinstala el perfil desde el setup.");
+        await RefreshSelectedRuntimeAsync(root, profile, progress, token); return profile;
+    }
     internal static int AvailablePort()
     {
         for (var port = 8088; port < 8108; port++)
@@ -70,14 +136,7 @@ internal static class ModelProvisioner
         var current = RuntimeProfile.Load(root); RuntimeProfile profile;
         if (plan.Kind == "none")
         {
-            // Update the standard selected CPU runtime without changing any
-            // profile, model, preference or voice path. Custom runtimes stay custom.
-            if (current.Kind == "strata-cpu")
-            {
-                var standard = SafeFiles.Child(root, @"runtime\strata-cpu\strata-cpu.exe");
-                if (InstallationPaths.Resolve(root, current.Executable).Equals(standard, StringComparison.OrdinalIgnoreCase)) await InstallCpuRuntimeAsync(root, progress, token);
-                else progress?.Report(new("Conservando motor personalizado", "El binario CPU usa otra ruta; no se sobrescribe automáticamente."));
-            }
+            await RefreshSelectedRuntimeAsync(root, current, progress, token);
             return current;
         }
         var packages = SafeFiles.Child(root, @"runtime\packages");
@@ -126,9 +185,8 @@ internal static class ModelProvisioner
             var wantsGpu = hardware.Gpus.Any(g => !g.Software && g.Usable && (g.DedicatedBytes >= 1536L * 1048576 || !g.DxgiVisible && g.VendorId == 0x10de || g.Integrated && hardware.RamGiB >= 7.5 && g.SharedBytes >= 2L * 1073741824));
             var package = wantsGpu ? "llama-vulkan.zip" : "llama-cpu.zip";
             progress?.Report(new("Preparando motor", wantsGpu ? "Vulkan · verificando las gráficas reales" : "CPU · perfil para equipo sin GPU dedicada"));
-            SafeFiles.ExtractZip(Path.Combine(packages, package), runtime, token);
-            foreach (var crt in Directory.EnumerateFiles(Path.Combine(root, "app"), "*140*.dll")) File.Copy(crt, Path.Combine(runtime, Path.GetFileName(crt)), true);
-            var exe = Path.Combine(runtime, "llama-server.exe"); var devices = "none"; var description = "CPU"; var layers = 0;
+            var exe = await InstallLlamaRuntimeAsync(root, wantsGpu, progress, token); var devices = "none"; var description = "CPU"; var layers = 0;
+
             using var probeLimit = CancellationTokenSource.CreateLinkedTokenSource(token); probeLimit.CancelAfter(TimeSpan.FromSeconds(25));
             if (wantsGpu)
             {
@@ -142,7 +200,7 @@ internal static class ModelProvisioner
                 }
                 catch (Exception e) when (!token.IsCancellationRequested && e is IOException or OperationCanceledException)
                 { progress?.Report(new("GPU no disponible", "Se configurará CPU explícitamente. " + e.Message)); }
-                if (devices == "none") { SafeFiles.ExtractZip(Path.Combine(packages, "llama-cpu.zip"), runtime, token); description = "CPU · Vulkan no verificado"; }
+                if (devices == "none") { await InstallLlamaRuntimeAsync(root, false, progress, token); description = "CPU · Vulkan no verificado"; }
             }
             profile = new() { Kind = "llama", ModelId = model.Id, Label = plan.Label, Executable = Path.GetRelativePath(root, exe), ModelFile = modelPath,
                 Context = plan.Context, Devices = devices, DeviceDescription = description, GpuLayers = layers, Threads = Math.Clamp(hardware.Threads / 2, 1, 16), Port = current.Configured ? current.Port : AvailablePort() };

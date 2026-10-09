@@ -16,6 +16,8 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
     private int? _reportedContext;
     private bool _tokenizerUnavailable;
     internal string State { get; private set; } = "Sin iniciar";
+    internal string? LastLoadError { get; private set; }
+    internal ModelInstallation InstallationStatus() => ModelInstallationInspector.Inspect(AppPaths.Root, Profile);
     internal string Model { get; private set; } = transportProfile?.ModelId ?? RuntimeProfile.Load(AppPaths.Root).ModelId;
     internal object? LastGeneration { get; private set; }
     internal List<object> Generations { get; } = [];
@@ -37,7 +39,7 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
         catch (Exception e) when (e is IOException or JsonException or ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { return null; }
     }
     internal object Snapshot() => new { state = State, ready = Ready, model = Ready ? Model : Profile.ModelId, endpoint = Endpoint.ToString(),
-        profile = Profile.Kind, configured = Profile.Configured, configuredGpu = Profile.DeviceDescription,
+        profile = Profile.Kind, configured = Profile.Configured, configuredGpu = Profile.DeviceDescription, lastLoadError = LastLoadError,
         contextTokens = EffectiveContext, configuredContextTokens = Profile.Context, activeLaunch = ActiveLaunch, portable = PortableStatus(), rx580Execution = Profile.Kind == "strata-dual" ? Peer() : null,
         lowMemoryCpu = CpuMemory(), lastGeneration = LastGeneration, voice = voice.Snapshot(), automaticFallback = false };
     private object? CpuMemory()
@@ -73,7 +75,9 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
         {
             if (Ready) return;
             var profile = Profile;
-            if (!profile.Configured) throw new FileNotFoundException("No hay un modelo instalado. Usa Modelos → Analizar e instalar, o el setup.");
+            LastLoadError = null;
+            var installation = ModelInstallationInspector.Inspect(AppPaths.Root, profile);
+            if (!installation.FilesReady) throw new FileNotFoundException(installation.Message);
             if (!profile.NativeExecutable && (!File.Exists(AppPaths.EngineConfig) || !File.Exists(AppPaths.StrataPython)))
                 throw new FileNotFoundException("Falta el runtime de Strata configurado. Repara la instalación desde el setup.");
             if (profile.Kind != "strata-cpu" && Process.GetProcessesByName("VrcLocalCompanion").Any(p => !p.HasExited))
@@ -134,7 +138,8 @@ internal sealed class EngineHost(NeuralVoice voice, HttpClient? transport = null
             }
             throw new TimeoutException("Strata no terminó de cargar en tres minutos.");
         }
-        catch { SetState("Falló la carga"); StopProcess(); throw; }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { LastLoadError = null; SetState("Carga cancelada"); StopProcess(); throw; }
+        catch (Exception e) { LastLoadError = e.Message; SetState("Falló la carga"); StopProcess(); throw; }
         finally { _gate.Release(); }
     }
     private async Task<JsonElement?> HealthAsync(CancellationToken token)

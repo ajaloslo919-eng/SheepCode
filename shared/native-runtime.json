@@ -1,0 +1,10 @@
+{
+  "cpu": {
+    "file": "llama-cpu.zip",
+    "sha256": "14cf1303ca9ac3abd94816850532f9f9a69ac66fbaca3776fc6f9061c2fac1d1"
+  },
+  "vulkan": {
+    "file": "llama-vulkan.zip",
+    "sha256": "55a378aa095b466979d85075234f66d7655c7a7483222af0c006c0e55b4d7bd6"
+  }
+}

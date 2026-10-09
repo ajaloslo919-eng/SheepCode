@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>SheepCode.Setup</AssemblyName>
     <SheepAppRoot Condition="Exists('..\app\SheepCode.csproj')">..\app</SheepAppRoot>
@@ -14,6 +14,7 @@
     <Compile Include="$(SheepAppRoot)\Mascots.cs" Link="Mascots.cs" />
     <EmbeddedResource Include="..\shared\model-catalog.json" LogicalName="SheepCode.model-catalog.json" />
     <EmbeddedResource Include="..\shared\strata-cpu.json" LogicalName="SheepCode.strata-cpu.json" />
+    <EmbeddedResource Include="..\shared\native-runtime.json" LogicalName="SheepCode.native-runtime.json" />
     <EmbeddedResource Include="..\shared\dictation-model.json" LogicalName="SheepCode.dictation-model.json" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
   </ItemGroup>

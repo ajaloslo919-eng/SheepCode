@@ -148,3 +148,11 @@ Escribe o dicta y acepta «Genera una imagen: DESCRIPCIÓN», «Crea la imagen d
 
 
 Si eliges un PNG existente, SheepCode pide confirmar y conserva su contenido anterior en una copia .bak. Si el archivo cambia durante la confirmación, conserva esa edición y pide elegir de nuevo dónde guardar.
+
+## 🧠 Modelo instalado que no arranca
+
+La lista del catálogo muestra opciones para todos los equipos; no indica que Qwen3-32B u otro modelo esté instalado ni recomendado. El panel **Modelos** muestra arriba el modelo seleccionado, el estado del motor y el último error. **Copiar** copia un diagnóstico completo con las rutas que faltan; también puedes decir «Diagnostica el modelo» por texto o dictado aceptado.
+
+Después de instalar el modelo, pulsa **Cargar IA** o di «Activa el motor». Si faltan la carpeta o DLL del runtime nativo seleccionado, pulsa **Reparar** o di «Repara el motor»: restaura el paquete local verificado por SHA-256, guarda respaldo y conserva pesos, perfil, dispositivos, permisos y voz. El setup también hace esta reparación al actualizar. No descarga pesos ni cambia a otro modelo. Los runtimes personalizados se respetan y requieren restaurar su ruta.
+
+Si el diagnóstico indica que faltan los pesos, reintenta la instalación del modelo elegido. Un archivo ya completo en la ruta esperada se verifica y reutiliza; una descarga `.part` se reanuda. Si indica «Sin modelo seleccionado», usa **Analizar** y **Instalar** para instalar el recomendado por capacidad. La memoria y el disco de ese equipo determinan la recomendación. Una carpeta de proyecto es distinta de los modelos: se elige desde **Proyecto** para preparar código y revisar propuestas.
